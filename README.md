@@ -609,3 +609,4 @@ python -m compileall custom_components/hems_master
 ## 16. Licentie en aansprakelijkheid
 
 Dit project is bedoeld als technische basis en moet vóór productie worden gevalideerd tegen jouw exacte Deye-model, firmware, laadpaal, MID-meter en netaansluiting. De software wordt geleverd zonder garantie. De gebruiker blijft verantwoordelijk voor elektrische veiligheid, netcode, ERE-regelgeving en fiscale behandeling.
+# KD-Home-Energy-Brain
