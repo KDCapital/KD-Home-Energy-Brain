@@ -1,0 +1,169 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HEMS Master",
+        "description": "Connect the dynamic price and the EV charger MID meter. All other entities are optional and can be added in the next step or later via Configure.",
+        "data": {
+          "name": "Name",
+          "price_entity": "Dynamic price sensor (EUR/kWh)",
+          "ev_energy_entity": "EV charger MID meter (total kWh)"
+        }
+      },
+      "entities": {
+        "title": "Entity mapping",
+        "description": "Select your existing entities. HEMS Master normalises power (W/kW), current (A/mA), energy (kWh/Wh) and SOC. Leave fields empty when an entity is not available.",
+        "data": {
+          "ev_power_entity": "EV charging power",
+          "ev_current_entity": "EV charging current",
+          "ev_connected_entity": "EV connected",
+          "ev_charger_switch_entity": "EV charger enable switch",
+          "ev_current_number_entity": "EV charger current setpoint",
+          "battery_power_entity": "Battery power",
+          "battery_soc_entity": "Battery state of charge",
+          "grid_power_entity": "Grid power",
+          "grid_current_entity": "Grid current (whole service)",
+          "pv_power_entity": "PV power",
+          "house_load_entity": "House load",
+          "heatpump_power_entity": "Heat pump power",
+          "heatpump_cop_entity": "Heat pump COP"
+        }
+      },
+      "finance": {
+        "title": "Financial parameters",
+        "description": "Enter the all-in dynamic import price in the price sensor. Rates are in euro per kWh and can also be changed from the dashboard later.",
+        "data": {
+          "employer_rate": "Employer reimbursement per kWh",
+          "ere_rate": "ERE revenue per kWh",
+          "min_arbitrage_margin": "Minimum arbitrage margin per kWh",
+          "battery_capacity_kwh": "Battery capacity",
+          "round_trip_efficiency": "Battery round-trip efficiency"
+        }
+      },
+      "grid": {
+        "title": "Grid and EV limits",
+        "description": "The grid current sensor must measure the whole service, including the EV charger and heat pump. HEMS subtracts the EV current to calculate the other load.",
+        "data": {
+          "phases": "Number of phases",
+          "voltage": "Phase voltage",
+          "max_grid_current": "Maximum grid current per phase",
+          "min_ev_current": "Minimum EV charging current",
+          "max_ev_current": "Maximum EV charging current",
+          "grid_current_reserve": "Safety reserve",
+          "ev_control_enabled": "Allow HEMS to control the EV charger",
+          "grid_power_inverted": "Invert grid power sign",
+          "battery_power_inverted": "Invert battery power sign"
+        }
+      },
+      "modbus": {
+        "title": "Deye Modbus",
+        "description": "Modbus writes are disabled by default. Enable monitoring first, verify the register map with your inverter, then enable writes. The integration always uses the register 1100 unlock/lock sequence.",
+        "data": {
+          "modbus_enabled": "Enable Modbus connection",
+          "modbus_host": "Deye IP address or hostname",
+          "modbus_port": "TCP port",
+          "modbus_unit": "Modbus unit / slave ID",
+          "modbus_write_enabled": "Enable physical Modbus writes"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the Deye inverter. Check the IP address, port, unit ID and Modbus TCP setting.",
+      "invalid_host": "Enter a valid IP address or hostname, without http:// or a path.",
+      "entity_not_found": "One of the required entities does not exist in Home Assistant.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "HEMS Master is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HEMS Master options",
+        "description": "Choose what to change. Existing runtime values can be tuned from the dashboard.",
+        "menu_options": {
+          "entities": "Entity mapping",
+          "finance": "Financial parameters",
+          "grid": "Grid and EV limits",
+          "modbus": "Deye Modbus"
+        }
+      },
+      "entities": {
+        "title": "Entity mapping",
+        "description": "Change the optional source and actuator entities.",
+        "data": {
+          "ev_power_entity": "EV charging power",
+          "ev_current_entity": "EV charging current",
+          "ev_connected_entity": "EV connected",
+          "ev_charger_switch_entity": "EV charger enable switch",
+          "ev_current_number_entity": "EV charger current setpoint",
+          "battery_power_entity": "Battery power",
+          "battery_soc_entity": "Battery state of charge",
+          "grid_power_entity": "Grid power",
+          "grid_current_entity": "Grid current (whole service)",
+          "pv_power_entity": "PV power",
+          "house_load_entity": "House load",
+          "heatpump_power_entity": "Heat pump power",
+          "heatpump_cop_entity": "Heat pump COP"
+        }
+      },
+      "finance": {
+        "title": "Financial parameters",
+        "data": {
+          "employer_rate": "Employer reimbursement per kWh",
+          "ere_rate": "ERE revenue per kWh",
+          "min_arbitrage_margin": "Minimum arbitrage margin per kWh",
+          "battery_capacity_kwh": "Battery capacity",
+          "round_trip_efficiency": "Battery round-trip efficiency"
+        }
+      },
+      "grid": {
+        "title": "Grid and EV limits",
+        "data": {
+          "phases": "Number of phases",
+          "voltage": "Phase voltage",
+          "max_grid_current": "Maximum grid current per phase",
+          "min_ev_current": "Minimum EV charging current",
+          "max_ev_current": "Maximum EV charging current",
+          "grid_current_reserve": "Safety reserve",
+          "ev_control_enabled": "Allow HEMS to control the EV charger",
+          "grid_power_inverted": "Invert grid power sign",
+          "battery_power_inverted": "Invert battery power sign"
+        }
+      },
+      "modbus": {
+        "title": "Deye Modbus",
+        "data": {
+          "modbus_enabled": "Enable Modbus connection",
+          "modbus_host": "Deye IP address or hostname",
+          "modbus_port": "TCP port",
+          "modbus_unit": "Modbus unit / slave ID",
+          "modbus_write_enabled": "Enable physical Modbus writes"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the Deye inverter.",
+      "invalid_host": "Enter a valid IP address or hostname."
+    }
+  },
+  "services": {
+    "recalculate": {
+      "name": "Recalculate",
+      "description": "Refresh entity readings and recalculate the financial ledger."
+    },
+    "reset_today": {
+      "name": "Reset today",
+      "description": "Archive and clear today's financial counters."
+    },
+    "apply_plan": {
+      "name": "Apply plan",
+      "description": "Re-evaluate and immediately apply the inverter plan."
+    },
+    "export_audit": {
+      "name": "Export audit",
+      "description": "Return stored MID sessions and ledger data for the NEa/ERE audit."
+    }
+  }
+}

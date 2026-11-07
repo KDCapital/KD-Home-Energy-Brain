@@ -1,0 +1,12 @@
+recalculate:
+  name: Recalculate
+  description: Refresh entity readings and recalculate the financial ledger.
+reset_today:
+  name: Reset today
+  description: Archive and clear today's HEMS financial counters. This cannot be undone.
+apply_plan:
+  name: Apply plan
+  description: Re-evaluate the price/arbitrage plan and immediately apply it to the Deye inverter.
+export_audit:
+  name: Export audit
+  description: Return the stored MID-meter sessions and financial ledger as a service response for the NEa/ERE audit.

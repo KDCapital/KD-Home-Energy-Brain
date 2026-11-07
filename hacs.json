@@ -1,0 +1,7 @@
+{
+  "name": "HEMS Master",
+  "render_readme": true,
+  "homeassistant": "2024.6.0",
+  "domains": ["hems_master"],
+  "zip_release": false
+}

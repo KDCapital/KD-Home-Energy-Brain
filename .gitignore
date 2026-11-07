@@ -1,0 +1,19 @@
+# Home Assistant runtime data
+.storage/
+home-assistant.log
+home-assistant_v2.db*
+configuration.yaml
+secrets.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local tooling and editor files
+.dsh_test
+.DS_Store
+.idea/
+.vscode/

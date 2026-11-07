@@ -1,0 +1,169 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HEMS Master",
+        "description": "Koppel de dynamische prijssensor en de MID-meter van de laadpaal. Alle overige entiteiten zijn optioneel en voeg je in de volgende stap of later via Configureren toe.",
+        "data": {
+          "name": "Naam",
+          "price_entity": "Dynamische prijssensor (EUR/kWh)",
+          "ev_energy_entity": "MID-meter laadpaal (totaal kWh)"
+        }
+      },
+      "entities": {
+        "title": "Entiteiten koppelen",
+        "description": "Selecteer je bestaande entiteiten. HEMS Master normaliseert vermogen (W/kW), stroom (A/mA), energie (kWh/Wh) en SOC. Laat een veld leeg als de entiteit niet beschikbaar is.",
+        "data": {
+          "ev_power_entity": "Laadvermogen EV",
+          "ev_current_entity": "Laadstroom EV",
+          "ev_connected_entity": "EV aangesloten",
+          "ev_charger_switch_entity": "Laadpaal aan/uit-schakelaar",
+          "ev_current_number_entity": "Laadstroom-instelling laadpaal",
+          "battery_power_entity": "Accuvermogen",
+          "battery_soc_entity": "Accu-SOC",
+          "grid_power_entity": "Netvermogen",
+          "grid_current_entity": "Netstroom (hele aansluiting)",
+          "pv_power_entity": "PV-vermogen",
+          "house_load_entity": "Huisbelasting",
+          "heatpump_power_entity": "Warmtepompvermogen",
+          "heatpump_cop_entity": "Warmtepomp-COP"
+        }
+      },
+      "finance": {
+        "title": "Financiële parameters",
+        "description": "Vul in de prijssensor de all-in dynamische importprijs in. Tarieven zijn in euro per kWh en zijn later ook via het dashboard aan te passen.",
+        "data": {
+          "employer_rate": "Werkgeversvergoeding per kWh",
+          "ere_rate": "ERE-opbrengst per kWh",
+          "min_arbitrage_margin": "Minimale arbitragemarge per kWh",
+          "battery_capacity_kwh": "Accucapaciteit",
+          "round_trip_efficiency": "Round-trip-rendement accu"
+        }
+      },
+      "grid": {
+        "title": "Net- en EV-limieten",
+        "description": "De netstroomsensor moet de hele aansluiting meten, inclusief laadpaal en warmtepomp. HEMS trekt de EV-stroom eraf om de overige belasting te berekenen.",
+        "data": {
+          "phases": "Aantal fasen",
+          "voltage": "Fasespanning",
+          "max_grid_current": "Maximale netstroom per fase",
+          "min_ev_current": "Minimale laadstroom EV",
+          "max_ev_current": "Maximale laadstroom EV",
+          "grid_current_reserve": "Veiligheidsmarge",
+          "ev_control_enabled": "HEMS mag de laadpaal aansturen",
+          "grid_power_inverted": "Teken netvermogen omkeren",
+          "battery_power_inverted": "Teken accuvermogen omkeren"
+        }
+      },
+      "modbus": {
+        "title": "Deye Modbus",
+        "description": "Modbus-schrijfacties staan standaard uit. Schakel eerst monitoring in, controleer de registermap van jouw omvormer en zet daarna schrijven aan. De integratie gebruikt altijd de unlock/lock-sequentie via register 1100.",
+        "data": {
+          "modbus_enabled": "Modbus-verbinding inschakelen",
+          "modbus_host": "Deye IP-adres of hostname",
+          "modbus_port": "TCP-poort",
+          "modbus_unit": "Modbus unit / slave-ID",
+          "modbus_write_enabled": "Fysieke Modbus-schrijfacties inschakelen"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met de Deye-omvormer. Controleer IP-adres, poort, unit-ID en de Modbus TCP-instelling.",
+      "invalid_host": "Vul een geldig IP-adres of hostname in, zonder http:// of pad.",
+      "entity_not_found": "Een van de verplichte entiteiten bestaat niet in Home Assistant.",
+      "unknown": "Onverwachte fout"
+    },
+    "abort": {
+      "already_configured": "HEMS Master is al geconfigureerd."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HEMS Master-opties",
+        "description": "Kies wat je wilt wijzigen. Actuele waarden kunnen ook via het dashboard worden bijgesteld.",
+        "menu_options": {
+          "entities": "Entiteiten koppelen",
+          "finance": "Financiële parameters",
+          "grid": "Net- en EV-limieten",
+          "modbus": "Deye Modbus"
+        }
+      },
+      "entities": {
+        "title": "Entiteiten koppelen",
+        "description": "Wijzig de optionele bron- en actuator-entiteiten.",
+        "data": {
+          "ev_power_entity": "Laadvermogen EV",
+          "ev_current_entity": "Laadstroom EV",
+          "ev_connected_entity": "EV aangesloten",
+          "ev_charger_switch_entity": "Laadpaal aan/uit-schakelaar",
+          "ev_current_number_entity": "Laadstroom-instelling laadpaal",
+          "battery_power_entity": "Accuvermogen",
+          "battery_soc_entity": "Accu-SOC",
+          "grid_power_entity": "Netvermogen",
+          "grid_current_entity": "Netstroom (hele aansluiting)",
+          "pv_power_entity": "PV-vermogen",
+          "house_load_entity": "Huisbelasting",
+          "heatpump_power_entity": "Warmtepompvermogen",
+          "heatpump_cop_entity": "Warmtepomp-COP"
+        }
+      },
+      "finance": {
+        "title": "Financiële parameters",
+        "data": {
+          "employer_rate": "Werkgeversvergoeding per kWh",
+          "ere_rate": "ERE-opbrengst per kWh",
+          "min_arbitrage_margin": "Minimale arbitragemarge per kWh",
+          "battery_capacity_kwh": "Accucapaciteit",
+          "round_trip_efficiency": "Round-trip-rendement accu"
+        }
+      },
+      "grid": {
+        "title": "Net- en EV-limieten",
+        "data": {
+          "phases": "Aantal fasen",
+          "voltage": "Fasespanning",
+          "max_grid_current": "Maximale netstroom per fase",
+          "min_ev_current": "Minimale laadstroom EV",
+          "max_ev_current": "Maximale laadstroom EV",
+          "grid_current_reserve": "Veiligheidsmarge",
+          "ev_control_enabled": "HEMS mag de laadpaal aansturen",
+          "grid_power_inverted": "Teken netvermogen omkeren",
+          "battery_power_inverted": "Teken accuvermogen omkeren"
+        }
+      },
+      "modbus": {
+        "title": "Deye Modbus",
+        "data": {
+          "modbus_enabled": "Modbus-verbinding inschakelen",
+          "modbus_host": "Deye IP-adres of hostname",
+          "modbus_port": "TCP-poort",
+          "modbus_unit": "Modbus unit / slave-ID",
+          "modbus_write_enabled": "Fysieke Modbus-schrijfacties inschakelen"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met de Deye-omvormer.",
+      "invalid_host": "Vul een geldig IP-adres of hostname in."
+    }
+  },
+  "services": {
+    "recalculate": {
+      "name": "Herberekenen",
+      "description": "Lees entiteiten opnieuw en herbereken het financiële grootboek."
+    },
+    "reset_today": {
+      "name": "Vandaag resetten",
+      "description": "Archiveer en wis de financiële tellers van vandaag."
+    },
+    "apply_plan": {
+      "name": "Plan toepassen",
+      "description": "Evalueer het prijs-/arbitrageplan opnieuw en pas het direct toe op de Deye."
+    },
+    "export_audit": {
+      "name": "Audit exporteren",
+      "description": "Geef de opgeslagen MID-sessies en grootboekdata terug voor NEa/ERE-audit."
+    }
+  }
+}

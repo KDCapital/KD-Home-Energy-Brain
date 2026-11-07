@@ -1,0 +1,13 @@
+{
+  "domain": "hems_master",
+  "name": "HEMS Master",
+  "codeowners": ["@larsk"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/larsk/hems_master",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/larsk/hems_master/issues",
+  "requirements": ["pymodbus>=3.6.0,<4.0.0"],
+  "version": "1.0.0"
+}

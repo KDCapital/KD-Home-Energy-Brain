@@ -1,0 +1,244 @@
+title: HEMS
+views:
+  - title: HEMS
+    path: hems
+    icon: mdi:home-lightning-bolt
+    badges:
+      - type: entity
+        entity: sensor.hems_system_status
+        color: var(--primary-color)
+    cards:
+      - type: markdown
+        content: |
+          ## {{ states('sensor.hems_system_status') }}
+          **Accu:** {{ states('sensor.hems_battery_soc') }}% ·
+          **Net:** {{ states('sensor.hems_grid_power') }} W ·
+          **EV:** {{ states('sensor.hems_ev_power') }} W ·
+          **Warmtepomp:** {{ states('sensor.hems_heatpump_power') }} W
+
+          *Laatste update: {{ relative_time(states('sensor.hems_last_update')) }} geleden.*
+
+      - type: custom:power-flow-card-plus
+        title: Live energiestromen
+        entities:
+          grid:
+            entity: sensor.hems_grid_power
+            name: Net
+            icon: mdi:transmission-tower
+          solar:
+            entity: sensor.hems_pv_power
+            name: Zon
+            icon: mdi:solar-power
+          battery:
+            entity: sensor.hems_battery_power
+            name: Accu 32 kWh
+            icon: mdi:battery
+            state_of_charge: sensor.hems_battery_soc
+          home:
+            entity: sensor.hems_house_load
+            name: Woning
+            icon: mdi:home-lightning-bolt
+          individual:
+            - entity: sensor.hems_ev_power
+              name: EV
+              icon: mdi:car-electric
+              color: '#f39c12'
+            - entity: sensor.hems_heatpump_power
+              name: Warmtepomp
+              icon: mdi:heat-pump
+              color: '#1abc9c'
+
+      - type: markdown
+        content: |
+          ### Financiële performance
+          Bedragen zijn inclusief de ingestelde werkgevers- en ERE-vergoeding, minus de dynamische importkosten.
+
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.hems_net_profit_today
+            name: Netto winst vandaag
+            icon: mdi:cash-multiple
+            show_state: true
+            styles:
+              card:
+                - border-radius: 18px
+                - padding: 14px
+              icon:
+                - color: '#2ecc71'
+              state:
+                - font-size: 24px
+                - font-weight: 700
+              name:
+                - font-size: 12px
+                - color: var(--secondary-text-color)
+          - type: custom:button-card
+            entity: sensor.hems_ev_employer_reimbursement_month
+            name: Werkgever deze maand
+            icon: mdi:briefcase-account
+            show_state: true
+            styles:
+              card:
+                - border-radius: 18px
+                - padding: 14px
+              icon:
+                - color: '#3498db'
+              state:
+                - font-size: 24px
+                - font-weight: 700
+              name:
+                - font-size: 12px
+                - color: var(--secondary-text-color)
+          - type: custom:button-card
+            entity: sensor.hems_ere_earnings_month
+            name: ERE deze maand
+            icon: mdi:leaf-circle
+            show_state: true
+            styles:
+              card:
+                - border-radius: 18px
+                - padding: 14px
+              icon:
+                - color: '#27ae60'
+              state:
+                - font-size: 24px
+                - font-weight: 700
+              name:
+                - font-size: 12px
+                - color: var(--secondary-text-color)
+          - type: custom:button-card
+            entity: sensor.hems_battery_arbitrage_profit_today
+            name: Accu-arbitrage vandaag
+            icon: mdi:battery-sync
+            show_state: true
+            styles:
+              card:
+                - border-radius: 18px
+                - padding: 14px
+              icon:
+                - color: '#9b59b6'
+              state:
+                - font-size: 24px
+                - font-weight: 700
+              name:
+                - font-size: 12px
+                - color: var(--secondary-text-color)
+
+      - type: custom:apexcharts-card
+        graph_span: 48h
+        span:
+          start: day
+        header:
+          show: true
+          title: Dynamische prijzen, accu en EV
+          show_states: true
+          colorize_states: true
+        now:
+          show: true
+          label: Nu
+        yaxis:
+          - id: price
+            show: true
+            decimals: 3
+            apex_config:
+              tickAmount: 4
+          - id: power
+            show: true
+            opposite: true
+            decimals: 0
+        series:
+          - entity: sensor.hems_current_price
+            name: Prijs EUR/kWh
+            type: column
+            yaxis_id: price
+            data_generator: |
+              return (entity.attributes.prices || []).map((p) => {
+                return [new Date(p.start).getTime(), p.price];
+              });
+            color_threshold:
+              - value: 0
+                color: '#2ecc71'
+              - value: 0.15
+                color: '#f1c40f'
+              - value: 0.3
+                color: '#e74c3c'
+          - entity: sensor.hems_battery_power
+            name: Accu W (laden +)
+            type: area
+            yaxis_id: power
+            curve: smooth
+            opacity: 0.2
+            color: '#3498db'
+            group_by:
+              func: avg
+              duration: 5min
+          - entity: sensor.hems_ev_power
+            name: EV W
+            type: area
+            yaxis_id: power
+            curve: smooth
+            opacity: 0.2
+            color: '#f39c12'
+            group_by:
+              func: avg
+              duration: 5min
+
+      - type: markdown
+        content: |
+          ### Besturing en overrides
+          Wijzigingen worden direct toegepast. Bij een actieve Modbus-fallback wordt niet geschreven tot de verbinding hersteld is.
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: entities
+            title: Modus
+            entities:
+              - entity: switch.hems_auto_arbitrage
+              - entity: switch.hems_auto_ev_charging
+              - entity: switch.hems_force_ev_charging
+              - entity: switch.hems_force_grid_charge
+          - type: entities
+            title: Financiële parameters
+            entities:
+              - entity: number.hems_employer_rate
+              - entity: number.hems_ere_rate
+              - entity: number.hems_min_arbitrage_margin
+              - entity: number.hems_max_grid_current
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: entities
+            title: Huidige laadsessie
+            entities:
+              - entity: sensor.hems_session_energy
+              - entity: sensor.hems_session_cost
+              - entity: sensor.hems_session_profit
+              - entity: sensor.hems_last_session_energy
+          - type: entities
+            title: Netbelasting
+            entities:
+              - entity: sensor.hems_max_allowed_ev_current
+              - entity: sensor.hems_available_grid_current
+              - entity: sensor.hems_current_price
+              - entity: sensor.hems_plan_reason
+          - type: entities
+            title: Energie vandaag
+            entities:
+              - entity: sensor.hems_ev_energy_today
+              - entity: sensor.hems_pv_energy_today
+              - entity: sensor.hems_grid_import_today
+              - entity: sensor.hems_grid_export_today
+
+      - type: markdown
+        content: |
+          ### Audit en ERE
+          De interne MID-meterstanden worden per laadsessie opgeslagen. Gebruik de service
+          `hems_master.export_audit` (Developer Tools → Actions) om een JSON-auditpayload
+          te verkrijgen voor je inboekdienstverlener. De ERE-opbrengst is conform
+          KG:204:2026:16 onbelast; dit dashboard is geen fiscaal advies.
