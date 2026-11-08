@@ -111,6 +111,7 @@ def calculate_period_profit(
     ev_import_cost: float,
     arbitrage_discharge_value: float,
     arbitrage_charge_cost: float,
+    arbitrage_export_value: float = 0.0,
 ) -> float:
     """Net result for a day/month, excluding taxes and depreciation."""
     return (
@@ -119,6 +120,7 @@ def calculate_period_profit(
         - _finite(ev_import_cost)
         + _finite(arbitrage_discharge_value)
         - _finite(arbitrage_charge_cost)
+        + _finite(arbitrage_export_value)
     )
 
 
@@ -317,6 +319,8 @@ class ArbitrageDecision:
     peak_price: float | None = None
     spread: float | None = None
     required_spread: float | None = None
+    battery_export: bool = False
+    export_price: float | None = None
 
 
 def decide_arbitrage(
@@ -330,6 +334,9 @@ def decide_arbitrage(
     auto_enabled: bool = True,
     force_grid_charge: bool = False,
     horizon_hours: int = 18,
+    battery_trading_enabled: bool = False,
+    battery_trade_min_spread: float = 0.05,
+    export_price: float | None = None,
 ) -> ArbitrageDecision | None:
     """Choose a grid-charge/discharge state for the current hour.
 
@@ -338,6 +345,12 @@ def decide_arbitrage(
     accounts for round-trip losses. At a high price the target SOC is lowered
     so the battery can cover the expensive hours; in the middle of the day a
     70-80% target leaves room for PV while avoiding forced import.
+
+    When battery trading is enabled, an additional direct check compares the
+    current all-in import price with the current feed-in/export price. A sale is
+    only selected when ``export - import`` is at least the configured trade
+    spread, so a normal Dutch import/export tax gap never triggers a loss-making
+    battery export.
     """
     if force_grid_charge:
         return ArbitrageDecision(
@@ -358,6 +371,28 @@ def decide_arbitrage(
 
     efficiency = _clamp(_finite(round_trip_efficiency, 0.90), 0.50, 1.0)
     required_spread = max(0.0, _finite(minimum_margin)) / efficiency
+
+    if battery_trading_enabled and export_price is not None:
+        sale_price = _finite(export_price, math.nan)
+        trade_spread = sale_price - current_price
+        threshold = max(0.0, _finite(battery_trade_min_spread, 0.05))
+        if (
+            math.isfinite(sale_price)
+            and soc > 20.0
+            and trade_spread >= threshold
+        ):
+            return ArbitrageDecision(
+                grid_charge=False,
+                target_soc=20,
+                solar_sell=True,
+                reason="profitable_battery_export",
+                price=current_price,
+                peak_price=sale_price,
+                spread=trade_spread,
+                required_spread=threshold,
+                battery_export=True,
+                export_price=sale_price,
+            )
 
     horizon_end = now + timedelta(hours=max(1, int(horizon_hours)))
     future = [

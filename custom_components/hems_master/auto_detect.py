@@ -18,10 +18,13 @@ from .const import (
     CONF_BARE_PRICE_ENTITY,
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_ERE_MARKET_PRICE_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
     CONF_EV_CURRENT_ENTITY,
     CONF_EV_CURRENT_NUMBER_ENTITY,
+    CONF_EV_ENERGY_ENTITY,
     CONF_EV_MODE_SELECT_ENTITY,
+    CONF_EXPORT_PRICE_ENTITY,
     CONF_EV_POWER_ENTITY,
     CONF_GRID_CURRENT_ENTITY,
     CONF_GRID_POWER_ENTITY,
@@ -214,28 +217,48 @@ def _detect_frank(
     )
     if forecast:
         detected[CONF_PRICE_FORECAST_ENTITY] = forecast
+    feed_in = _by_suffix(
+        candidates, domain="sensor", suffix="current_return_price"
+    )
+    if feed_in is None:
+        feed_in = _pick(
+            candidates,
+            domain="sensor",
+            include=("feed", "price"),
+        )
+    if feed_in is None:
+        feed_in = _pick(
+            candidates,
+            domain="sensor",
+            include=("return", "price"),
+        )
     full = _pick(
         current_prices,
         domain="sensor",
         include=("current", "price"),
         exclude=("market", "feed", "return", "gas", "cheap", "expensive", "tomorrow", "zone"),
     )
-    bare = _pick(
+    market = _pick(
         current_prices,
         domain="sensor",
         include=("current", "price", "market"),
         exclude=("feed", "return", "gas", "cheap", "expensive", "tomorrow", "zone"),
     )
+    bare = feed_in or market
+    if feed_in:
+        detected[CONF_EXPORT_PRICE_ENTITY] = feed_in
     if full:
         state = hass.states.get(full)
         attributes = state.attributes if state is not None else {}
         block = attributes.get("full_block")
         if isinstance(block, Mapping) and block.get("total_price_eur_kwh") is not None:
-            # Frank Quarter Prices: the state is the dynamic (bare) component;
-            # the all-in price rides along as full_block.total_price_eur_kwh.
+            # Frank Quarter Prices: the state is the dynamic import component;
+            # the all-in import price rides along as full_block.total_price_eur_kwh.
+            # Use the separate feed-in sensor as the bare/export value.
             detected[CONF_PRICE_ENTITY] = full
-            detected[CONF_BARE_PRICE_ENTITY] = full
             detected[CONF_PRICE_ATTRIBUTE] = "full_block.total_price_eur_kwh"
+            if bare:
+                detected[CONF_BARE_PRICE_ENTITY] = bare
             return detected
         detected[CONF_PRICE_ENTITY] = full
     if bare:
@@ -339,6 +362,36 @@ def _detect_evcc(candidates: list[_Candidate]) -> dict[str, str]:
     return detected
 
 
+def _detect_joulo(candidates: list[_Candidate]) -> dict[str, str]:
+    detected: dict[str, str] = {}
+    ere = _pick(
+        candidates,
+        domain="sensor",
+        include=("ere", "marktprijs"),
+    )
+    if ere is None:
+        ere = _pick(
+            candidates,
+            domain="sensor",
+            include=("ere", "market", "price"),
+        )
+    if ere is None:
+        ere = _by_suffix(candidates, domain="sensor", suffix="ere_indicative_price")
+    if ere:
+        detected[CONF_ERE_MARKET_PRICE_ENTITY] = ere
+
+    energy = _by_suffix(
+        candidates, domain="sensor", suffix="total_mid_kwh"
+    ) or _pick(
+        candidates,
+        domain="sensor",
+        include=("total", "mid", "kwh"),
+    )
+    if energy:
+        detected[CONF_EV_ENERGY_ENTITY] = energy
+    return detected
+
+
 def auto_detect_sources(
     hass: HomeAssistant,
     source_devices: dict[str, str | None],
@@ -363,4 +416,7 @@ def auto_detect_sources(
     )
     if evcc:
         detected.update(_detect_evcc(evcc))
+    joulo = _candidates(hass, source_devices.get("joulo"))
+    if joulo:
+        detected.update(_detect_joulo(joulo))
     return detected

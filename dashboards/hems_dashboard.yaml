@@ -244,8 +244,10 @@ views:
               - entity: sensor.hems_available_grid_current
               - entity: sensor.hems_current_price
               - entity: sensor.hems_bare_price
+              - entity: sensor.hems_export_price
               - entity: sensor.hems_ere_market_price
               - entity: sensor.hems_ere_rate_effective
+              - entity: sensor.hems_battery_export_revenue_today
               - entity: sensor.hems_plan_reason
           - type: entities
             title: Energie vandaag

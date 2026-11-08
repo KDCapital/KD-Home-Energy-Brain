@@ -12,12 +12,13 @@
       },
       "sources": {
         "title": "Auto-detect source devices",
-        "description": "Optionally select the devices from Solarman, Frank Quarter Prices, HomeWizard and EVCC. HEMS will prefill matching power, price, battery and EV entities. You can correct everything in the next step.",
+        "description": "Optionally select the devices from Solarman, Frank Quarter Prices, HomeWizard, EVCC and Joulo. HEMS will prefill matching power, price, battery and EV entities. You can correct everything in the next step.",
         "data": {
           "solarman_device_id": "Solarman/Deye inverter",
           "frank_device_id": "Frank Quarter Prices device",
           "homewizard_device_id": "HomeWizard P1 meter",
-          "evcc_device_id": "EVCC device"
+          "evcc_device_id": "EVCC device",
+          "joulo_device_id": "Joulo device"
         }
       },
       "entities": {
@@ -51,6 +52,9 @@
           "price_entity": "Dynamic price sensor (full all-in or bare)",
           "price_attribute": "Full-price attribute (optional, e.g. full_block.total_price_eur_kwh)",
           "price_forecast_entity": "Price forecast sensor (optional, with prices attribute)",
+          "export_price_entity": "Feed-in/export price sensor (for battery trading)",
+          "battery_trading_enabled": "Enable battery market trading",
+          "battery_trade_min_spread": "Minimum buy/sell spread for battery trading",
           "bare_price_entity": "Bare dynamic price (Eflux/EV settlement)",
           "employer_rate": "Fixed charging reimbursement per kWh (Eflux/employer)",
           "employer_pays_dynamic": "Eflux/employer reimburses the bare dynamic price",
@@ -127,7 +131,8 @@
           "solarman_device_id": "Solarman/Deye inverter",
           "frank_device_id": "Frank Quarter Prices device",
           "homewizard_device_id": "HomeWizard P1 meter",
-          "evcc_device_id": "EVCC device"
+          "evcc_device_id": "EVCC device",
+          "joulo_device_id": "Joulo device"
         }
       },
       "entities": {
@@ -160,6 +165,9 @@
           "price_entity": "Dynamic price sensor (full all-in or bare)",
           "price_attribute": "Full-price attribute (optional, e.g. full_block.total_price_eur_kwh)",
           "price_forecast_entity": "Price forecast sensor (optional, with prices attribute)",
+          "export_price_entity": "Feed-in/export price sensor (for battery trading)",
+          "battery_trading_enabled": "Enable battery market trading",
+          "battery_trade_min_spread": "Minimum buy/sell spread for battery trading",
           "bare_price_entity": "Bare dynamic price (Eflux/EV settlement)",
           "employer_rate": "Fixed charging reimbursement per kWh (Eflux/employer)",
           "employer_pays_dynamic": "Eflux/employer reimburses the bare dynamic price",

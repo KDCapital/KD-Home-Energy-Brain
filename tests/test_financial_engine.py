@@ -193,3 +193,33 @@ def test_full_battery_does_not_grid_charge() -> None:
     assert decision is not None
     assert decision.grid_charge is False
     assert decision.reason == "battery_full"
+
+
+def test_battery_trading_requires_positive_spread() -> None:
+    now = datetime(2026, 11, 7, 18, 0, tzinfo=timezone.utc)
+    decision = financial.decide_arbitrage(
+        now=now,
+        price=0.30,
+        forecast=[],
+        battery_soc=80,
+        minimum_margin=0.08,
+        battery_trading_enabled=True,
+        battery_trade_min_spread=0.05,
+        export_price=0.40,
+    )
+    assert decision is not None
+    assert decision.battery_export is True
+    assert decision.reason == "profitable_battery_export"
+
+    not_profitable = financial.decide_arbitrage(
+        now=now,
+        price=0.30,
+        forecast=[],
+        battery_soc=80,
+        minimum_margin=0.08,
+        battery_trading_enabled=True,
+        battery_trade_min_spread=0.05,
+        export_price=0.32,
+    )
+    assert not_profitable is not None
+    assert not_profitable.battery_export is False

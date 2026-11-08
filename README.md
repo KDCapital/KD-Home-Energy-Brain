@@ -115,11 +115,12 @@ In de stap **Brondapparaten automatisch herkennen** kun je optioneel de apparate
 | Bron | Automatisch ingevuld |
 |---|---|
 | Solarman/Deye | PV-vermogen, accuvermogen, accu-SOC, netvermogen, netstroom en huisbelasting |
-| Frank Quarter Prices | actuele prijs, volledige prijs uit `full_block.total_price_eur_kwh`, en `sensor.frank_prices_today` als forecast |
+| Frank Quarter Prices | actuele inkoopprijs, volledige prijs uit `full_block.total_price_eur_kwh`, feed-inprijs als kale en verkoopprijs, en `sensor.frank_prices_today` als forecast |
 | HomeWizard P1 | actief netvermogen en actieve netstroom |
 | EVCC | laadvermogen, laadstroom, voertuig aangesloten, max-stroom-select en modus-select |
+| Joulo | ERE-marktprijs (`sensor.joulo_actuele_ere_marktprijs`) en totale MID-laadenergie (`sensor.joulo_total_mid_kwh`) |
 
-De integratie vult alleen plausibele matches in. Je controleert en corrigeert ze in de volgende stap. Bij **Frank Quarter Prices** is de sensorstand de dynamische/kale prijs; de volledige all-in prijs zit in het attribuut `full_block.total_price_eur_kwh`. HEMS leest dat attribuut automatisch als volledige prijs en gebruikt de sensorstand als kale prijs. De prijsverwachting komt uit `sensor.frank_prices_today` (`prices`-attribuut met `total_price_eur_kwh` per kwartier).
+De integratie vult alleen plausibele matches in. Je controleert en corrigeert ze in de volgende stap. Bij **Frank Quarter Prices** is `sensor.frank_current_price` de actuele inkoopprijs; de volledige all-in prijs zit in het attribuut `full_block.total_price_eur_kwh`. Als kale/Eflux-prijs wordt `sensor.frank_current_return_price` (Current feed-in price) gebruikt. De prijsverwachting komt uit `sensor.frank_prices_today` (`prices`-attribuut met `total_price_eur_kwh` per kwartier).
 
 Later opnieuw scannen: **HEMS Master → Configureren → Brondapparaten automatisch herkennen**.
 
@@ -131,6 +132,9 @@ Later opnieuw scannen: **HEMS Master → Configureren → Brondapparaten automat
 | Volledige-prijsattribuut | optioneel | Pad naar de all-in prijs, bijvoorbeeld `full_block.total_price_eur_kwh`. |
 | Prijsverwachting-sensor | optioneel | Sensor met een `prices`-attribuut, bijvoorbeeld `sensor.frank_prices_today`. |
 | Kale dynamische prijs | optioneel | Prijs die Eflux voor de EV-opbrengst gebruikt. |
+| Teruglever-/verkoopprijs | optioneel | Feed-inprijs voor batterijhandel; valt terug op de kale prijs. |
+| Batterijhandel | uit | Laat de accu gericht ontladen/verkopen bij een positieve inkoop-/verkoopspread. |
+| Minimale handelsmarge | € 0,05/kWh | Drempel voor `verkoopprijs − inkoopprijs` voordat batterijhandel wordt toegestaan. |
 | Prijssensor is kaal | uit | Zet aan als de gekozen prijssensor de kale prijs is; full = kaal + opslag. |
 | Opslag kaal → all-in | € 0,25/kWh | Wordt gebruikt om de ontbrekende prijs af te leiden. |
 | Werkgeversvergoeding | € 0,25/kWh | Vaste vergoeding per geladen kWh (Eflux/werkgever). |
@@ -258,6 +262,9 @@ De device-naam is **HEMS**. Daardoor krijgen de belangrijkste entiteiten voorspe
 | `sensor.hems_heatpump_cop` | – |
 | `sensor.hems_current_price` | EUR/kWh |
 | `sensor.hems_bare_price` | EUR/kWh |
+| `sensor.hems_export_price` | EUR/kWh |
+| `sensor.hems_battery_export_revenue_today` | € |
+| `sensor.hems_battery_export_energy_today` | kWh |
 | `sensor.hems_ere_market_price` | EUR/ERE |
 | `sensor.hems_ere_rate_effective` | EUR/kWh |
 | `sensor.hems_max_allowed_ev_current` | A |
@@ -358,6 +365,7 @@ De netto dagwinst is:
 ```text
 Netto = Werkgever + ERE − EV-importkosten
       + Arbitrage-ontladen × prijs − Arbitrage-laadkosten
+      + Batterij-export × verkoopprijs
 ```
 
 De volledige consumentenprijs wordt gebruikt voor `sensor.hems_house_import_cost_today`. Daarin zit de netimport voor huis, warmtepomp en acculaden, minus het gemeten EV-laadvermogen. De EV-kosten en ERE-berekening gebruiken de kale prijs. Zonder EV-vermogenssensor kan HEMS het EV-deel niet van de huisimport aftrekken.
@@ -397,15 +405,46 @@ Een item mag een dictionary zijn met `start`/`time` en `price`/`value`, of een l
 
 De planner kijkt 18 uur vooruit en hanteert deze regels:
 
+0. **Batterijhandel (optioneel):** als `verkoopprijs − inkoopprijs ≥ handelsmarge`, Target SOC 20% en Solar Sell aan.
 1. **Negatieve of nulprijs:** laden toestaan tot 100% SOC, Solar Sell uit.
 2. **Winstgevende spread:** als `piekprijs − huidige prijs ≥ marge / rendement`, laden tot 100%, Solar Sell uit.
 3. **Accu vol (≥ 98%):** niet netladen.
 4. **Hoge prijs:** Target SOC 20%, Solar Sell aan, zodat de accu de dure uren kan dekken.
 5. **Overige uren:** Target SOC 75%, Solar Sell aan; ruimte voor PV en geen geforceerde netimport.
 
-Alleen bij een wijziging wordt er geschreven. De integratie schrijft **niet** elke 30 seconden dezelfde waarden opnieuw.
+Alleen bij een wijziging wordt er geschreven. De integratie schrijft **niet** elke 30 seconden dezelfde waarden opnieuw. De handelsregel vergelijkt de **actuele** inkoop- en verkoopprijs; bij een positieve spread wordt de accu nu ontladen/verkocht. Er is nog geen aparte exportprijsvoorspelling per kwartier.
 
 > De Deye gebruikt per tijdslot een Target SOC. Deze versie schrijft de waarden voor **slot 1** (registers 166 en 172), conform de opdrachtspecificatie. Als jouw omvormer op dat moment in een ander TOU-slot zit, kan het interne TOU-schema het effect bepalen. Controleer dit op je firmware en stem de TOU-tijden af.
+
+### 6.2a Batterijhandel en 2027
+
+Vanaf 1 januari 2027 stopt de salderingsregeling. Zelf opgewekte stroom die je later zelf gebruikt is dan veel meer waard dan terugleveren: bij veel vaste contracten blijft na terugleverkosten maar ongeveer **€ 0,006/kWh** over, tegenover een all-in inkoopprijs van ongeveer **€ 0,29/kWh**. Een accu loont in 2027 vooral voor **zelfconsumptie en piekvermijding**, niet voor grootschalige handel tegen de all-in inkoopprijs.
+
+Daarom is batterijhandel standaard **uit** en moet je hem expliciet aanzetten:
+
+| Instelling | Betekenis |
+|---|---|
+| **Batterijhandel** | Schakelt de handelsregel in. |
+| **Minimale handelsmarge** | `verkoopprijs − inkoopprijs` moet minstens dit bedrag per kWh zijn. |
+| **Teruglever-/verkoopprijs** | De feed-inprijs. Zonder aparte sensor gebruikt HEMS de kale prijs. |
+
+De handelsregel is streng:
+
+```text
+verkoopprijs − inkoopprijs ≥ minimale handelsmarge
+```
+
+Alleen dan gaat de accu naar Target SOC 20% en Solar Sell aan. Bij een normale Nederlandse import-/exportverhouding is het verschil negatief; er wordt dan **niet** verkocht. Dit voorkomt dat de accu stroom verkoopt tegen een lagere prijs dan de inkoop plus belasting.
+
+De opbrengst van batterij-export wordt apart geboekt:
+
+```text
+Batterij-exportopbrengst = geëxporteerde kWh × verkoopprijs
+```
+
+Deze komt in `sensor.hems_battery_export_revenue_today` en telt mee in de arbitragewinst. Alleen energie die eerder uit het net is geladen telt mee; export van eigen PV wordt niet als handelswinst geboekt.
+
+> **Let op:** de Deye-instelling `Solar Sell` is de gebruikte actuator. Of jouw firmware de accu daadwerkelijk naar het net laat ontladen, hangt af van de TOU-/werkmodus. Test dit eerst met kleine vermogens en een veilige SOC-ondergrens. Deze integratie schrijft alleen de bestaande registers 130, 145, 166 en 172.
 
 ### 6.3 Automatische EV-sturing
 

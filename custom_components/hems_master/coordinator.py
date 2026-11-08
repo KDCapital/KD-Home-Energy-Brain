@@ -42,6 +42,8 @@ from .const import (
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_POWER_INVERTED,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_TRADE_MIN_SPREAD,
+    CONF_BATTERY_TRADING_ENABLED,
     CONF_BARE_PRICE_ENTITY,
     CONF_EMPLOYER_RATE,
     CONF_EMPLOYER_PAYS_DYNAMIC,
@@ -49,6 +51,7 @@ from .const import (
     CONF_ERE_COMMISSION,
     CONF_ERE_CONVERSION_FACTOR,
     CONF_ERE_MARKET_PRICE_ENTITY,
+    CONF_EXPORT_PRICE_ENTITY,
     CONF_EV_CHARGER_SWITCH_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
     CONF_EV_CONTROL_ENABLED,
@@ -89,6 +92,8 @@ from .const import (
     CONF_SOLARMAN_DEVICE_ID,
     CONF_VOLTAGE,
     DEFAULT_BATTERY_CAPACITY,
+    DEFAULT_BATTERY_TRADE_MIN_SPREAD,
+    DEFAULT_BATTERY_TRADING_ENABLED,
     DEFAULT_EMPLOYER_RATE,
     DEFAULT_ERE_COMMISSION,
     DEFAULT_ERE_CONVERSION_FACTOR,
@@ -179,6 +184,8 @@ PERIOD_KEYS = (
     "arbitrage_charge_cost",
     "arbitrage_discharge_kwh",
     "arbitrage_discharge_value",
+    "arbitrage_export_kwh",
+    "arbitrage_export_value",
     "grid_import_kwh",
     "grid_export_kwh",
     "pv_energy_kwh",
@@ -651,6 +658,9 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             bare_price = bare_sensor
             if bare_price is None and price is not None:
                 bare_price = price - surcharge if surcharge else price
+        export_price = self._read_price(CONF_EXPORT_PRICE_ENTITY)
+        if export_price is None:
+            export_price = bare_price
         forecast_state = self._get_state(CONF_PRICE_FORECAST_ENTITY) or price_state
         prices, price_slots = self._parse_price_forecast(forecast_state, now)
         if price_is_bare and surcharge and attribute_price is None:
@@ -743,6 +753,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {
             "price": price,
             "bare_price": bare_price,
+            "export_price": export_price,
             "prices": prices,
             "ere_market_price": ere_market_price,
             "ere_rate": ere_rate,
@@ -936,9 +947,10 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_bare_price = bare_price
 
         if dt_hours > 0:
+            export_price = _as_float(readings.get("export_price"))
             self._integrate_grid_pv(readings, dt_hours)
             self._integrate_house_cost(readings, dt_hours, price)
-            self._integrate_arbitrage(readings, dt_hours, price)
+            self._integrate_arbitrage(readings, dt_hours, price, export_price)
 
         self._last_interval_at = now
 
@@ -1081,7 +1093,11 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._monthly["house_import_cost"] += cost
 
     def _integrate_arbitrage(
-        self, readings: Mapping[str, Any], dt_hours: float, price: float | None
+        self,
+        readings: Mapping[str, Any],
+        dt_hours: float,
+        price: float | None,
+        export_price: float | None = None,
     ) -> None:
         battery = _as_float(readings.get("battery"))
         grid = _as_float(readings.get("grid"))
@@ -1128,21 +1144,35 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             discharge_to_load = battery_discharge
 
-        eligible_kwh = min(
-            self._arbitrage_pool_kwh,
+        pool_before = self._arbitrage_pool_kwh
+        local_eligible = min(
+            pool_before,
             discharge_to_load / 1000.0 * dt_hours,
         )
         discharged_kwh = battery_discharge / 1000.0 * dt_hours
         # Drain the pool for all discharge, including EV charging and export.
         # Only the part that serves local load gets the avoided-import value.
-        self._arbitrage_pool_kwh = max(0.0, self._arbitrage_pool_kwh - discharged_kwh)
-        if eligible_kwh <= 0:
+        self._arbitrage_pool_kwh = max(0.0, pool_before - discharged_kwh)
+        if local_eligible > 0:
+            value = local_eligible * price
+            self._daily["arbitrage_discharge_kwh"] += local_eligible
+            self._daily["arbitrage_discharge_value"] += value
+            self._monthly["arbitrage_discharge_kwh"] += local_eligible
+            self._monthly["arbitrage_discharge_value"] += value
+
+        if export_price is None or grid_export <= 0:
             return
-        value = eligible_kwh * price
-        self._daily["arbitrage_discharge_kwh"] += eligible_kwh
-        self._daily["arbitrage_discharge_value"] += value
-        self._monthly["arbitrage_discharge_kwh"] += eligible_kwh
-        self._monthly["arbitrage_discharge_value"] += value
+        export_eligible = min(
+            max(0.0, pool_before - local_eligible),
+            min(battery_discharge, grid_export) / 1000.0 * dt_hours,
+        )
+        if export_eligible <= 0:
+            return
+        export_value = export_eligible * export_price
+        self._daily["arbitrage_export_kwh"] += export_eligible
+        self._daily["arbitrage_export_value"] += export_value
+        self._monthly["arbitrage_export_kwh"] += export_eligible
+        self._monthly["arbitrage_export_value"] += export_value
 
     def _ensure_session(self, now: datetime, *, start_meter: float | None) -> None:
         if self._session.get("started_at"):
@@ -1622,6 +1652,20 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         or DEFAULT_ROUND_TRIP_EFFICIENCY
                     ),
                     auto_enabled=True,
+                    battery_trading_enabled=bool(
+                        self.config.get(
+                            CONF_BATTERY_TRADING_ENABLED,
+                            DEFAULT_BATTERY_TRADING_ENABLED,
+                        )
+                    ),
+                    battery_trade_min_spread=float(
+                        _as_float(
+                            self.config.get(CONF_BATTERY_TRADE_MIN_SPREAD),
+                            DEFAULT_BATTERY_TRADE_MIN_SPREAD,
+                        )
+                        or 0.0
+                    ),
+                    export_price=_as_float(readings.get("export_price")),
                 )
                 if decision is not None:
                     settings = InverterSettings(
@@ -1647,6 +1691,12 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "required_spread": (
                             round(decision.required_spread, 5)
                             if decision.required_spread is not None
+                            else None
+                        ),
+                        "battery_export": decision.battery_export,
+                        "export_price": (
+                            round(decision.export_price, 5)
+                            if decision.export_price is not None
                             else None
                         ),
                     }
@@ -1889,7 +1939,9 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             - result["ev_import_cost"]
         )
         arbitrage_profit = (
-            result["arbitrage_discharge_value"] - result["arbitrage_charge_cost"]
+            result["arbitrage_discharge_value"]
+            + result["arbitrage_export_value"]
+            - result["arbitrage_charge_cost"]
         )
         result.update(
             {
@@ -1905,6 +1957,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         result["ev_import_cost"],
                         result["arbitrage_discharge_value"],
                         result["arbitrage_charge_cost"],
+                        result["arbitrage_export_value"],
                     ),
                     4,
                 ),
@@ -1989,6 +2042,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "price": {
                 "now": price,
                 "bare": _as_float(readings.get("bare_price")),
+                "export": _as_float(readings.get("export_price")),
                 "surcharge": _as_float(
                     self.config.get(CONF_PRICE_SURCHARGE), 0.0
                 ),

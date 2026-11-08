@@ -12,12 +12,13 @@
       },
       "sources": {
         "title": "Brondapparaten automatisch herkennen",
-        "description": "Selecteer optioneel de apparaten van Solarman, Frank Quarter Prices, HomeWizard en EVCC. HEMS vult passende vermogen-, prijs-, accu- en EV-entiteiten alvast in. Je kunt alles in de volgende stap corrigeren.",
+        "description": "Selecteer optioneel de apparaten van Solarman, Frank Quarter Prices, HomeWizard, EVCC en Joulo. HEMS vult passende vermogen-, prijs-, accu- en EV-entiteiten alvast in. Je kunt alles in de volgende stap corrigeren.",
         "data": {
           "solarman_device_id": "Solarman/Deye-omvormer",
           "frank_device_id": "Frank Quarter Prices-apparaat",
           "homewizard_device_id": "HomeWizard P1-meter",
-          "evcc_device_id": "EVCC-apparaat"
+          "evcc_device_id": "EVCC-apparaat",
+          "joulo_device_id": "Joulo-apparaat"
         }
       },
       "entities": {
@@ -51,6 +52,9 @@
           "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
           "price_attribute": "Attribuut met volledige prijs (optioneel, bijv. full_block.total_price_eur_kwh)",
           "price_forecast_entity": "Prijsverwachting-sensor (optioneel, met prices-attribuut)",
+          "export_price_entity": "Teruglever-/verkoopprijs-sensor (voor batterijhandel)",
+          "battery_trading_enabled": "Batterijhandel op de markt inschakelen",
+          "battery_trade_min_spread": "Minimale inkoop-/verkoopmarge voor batterijhandel",
           "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "employer_rate": "Vaste laadvergoeding per kWh (Eflux/werkgever)",
           "employer_pays_dynamic": "Eflux/werkgever vergoedt de kale dynamische prijs",
@@ -127,7 +131,8 @@
           "solarman_device_id": "Solarman/Deye-omvormer",
           "frank_device_id": "Frank Quarter Prices-apparaat",
           "homewizard_device_id": "HomeWizard P1-meter",
-          "evcc_device_id": "EVCC-apparaat"
+          "evcc_device_id": "EVCC-apparaat",
+          "joulo_device_id": "Joulo-apparaat"
         }
       },
       "entities": {
@@ -160,6 +165,9 @@
           "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
           "price_attribute": "Attribuut met volledige prijs (optioneel, bijv. full_block.total_price_eur_kwh)",
           "price_forecast_entity": "Prijsverwachting-sensor (optioneel, met prices-attribuut)",
+          "export_price_entity": "Teruglever-/verkoopprijs-sensor (voor batterijhandel)",
+          "battery_trading_enabled": "Batterijhandel op de markt inschakelen",
+          "battery_trade_min_spread": "Minimale inkoop-/verkoopmarge voor batterijhandel",
           "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "employer_rate": "Vaste laadvergoeding per kWh (Eflux/werkgever)",
           "employer_pays_dynamic": "Eflux/werkgever vergoedt de kale dynamische prijs",

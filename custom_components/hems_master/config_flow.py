@@ -18,6 +18,8 @@ from .const import (
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_POWER_INVERTED,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_TRADE_MIN_SPREAD,
+    CONF_BATTERY_TRADING_ENABLED,
     CONF_BARE_PRICE_ENTITY,
     CONF_EMPLOYER_RATE,
     CONF_EMPLOYER_PAYS_DYNAMIC,
@@ -25,6 +27,7 @@ from .const import (
     CONF_ERE_CONVERSION_FACTOR,
     CONF_ERE_MARKET_PRICE_ENTITY,
     CONF_ERE_RATE,
+    CONF_EXPORT_PRICE_ENTITY,
     CONF_EV_CHARGER_SWITCH_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
     CONF_EV_CONTROL_ENABLED,
@@ -47,6 +50,7 @@ from .const import (
     CONF_HEATPUMP_POWER_ENTITY,
     CONF_HOMEWIZARD_DEVICE_ID,
     CONF_HOUSE_LOAD_ENTITY,
+    CONF_JOULO_DEVICE_ID,
     CONF_MAX_EV_CURRENT,
     CONF_MAX_GRID_CURRENT,
     CONF_MIN_ARBITRAGE_MARGIN,
@@ -69,6 +73,8 @@ from .const import (
     CONF_SOLARMAN_DEVICE_ID,
     CONF_VOLTAGE,
     DEFAULT_BATTERY_CAPACITY,
+    DEFAULT_BATTERY_TRADE_MIN_SPREAD,
+    DEFAULT_BATTERY_TRADING_ENABLED,
     DEFAULT_EMPLOYER_PAYS_DYNAMIC,
     DEFAULT_EMPLOYER_RATE,
     DEFAULT_ERE_COMMISSION,
@@ -255,6 +261,31 @@ def _finance_schema(config: dict[str, Any]) -> vol.Schema:
                 },
             ): _entity_selector("sensor"),
             vol.Optional(
+                CONF_EXPORT_PRICE_ENTITY,
+                description={
+                    "suggested_value": config.get(CONF_EXPORT_PRICE_ENTITY)
+                    or None
+                },
+            ): _entity_selector("sensor"),
+            vol.Optional(
+                CONF_BATTERY_TRADING_ENABLED,
+                default=bool(
+                    config.get(
+                        CONF_BATTERY_TRADING_ENABLED,
+                        DEFAULT_BATTERY_TRADING_ENABLED,
+                    )
+                ),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                CONF_BATTERY_TRADE_MIN_SPREAD,
+                default=float(
+                    config.get(
+                        CONF_BATTERY_TRADE_MIN_SPREAD,
+                        DEFAULT_BATTERY_TRADE_MIN_SPREAD,
+                    )
+                ),
+            ): _number(0, 1, 0.001, unit="EUR/kWh"),
+            vol.Optional(
                 CONF_EMPLOYER_RATE,
                 default=float(config.get(CONF_EMPLOYER_RATE, DEFAULT_EMPLOYER_RATE)),
             ): _number(0, 5, 0.001, unit="EUR/kWh"),
@@ -407,6 +438,14 @@ def _source_schema(config: dict[str, Any]) -> vol.Schema:
             ): selector.DeviceSelector(
                 selector.DeviceSelectorConfig(integration="evcc_intg")
             ),
+            vol.Optional(
+                CONF_JOULO_DEVICE_ID,
+                description={
+                    "suggested_value": config.get(CONF_JOULO_DEVICE_ID) or None
+                },
+            ): selector.DeviceSelector(
+                selector.DeviceSelectorConfig(integration="joulo")
+            ),
         }
     )
 
@@ -417,6 +456,7 @@ def _detected_sources(data: dict[str, Any]) -> dict[str, str | None]:
         "frank_quarter_prices": data.get(CONF_FRANK_DEVICE_ID),
         "homewizard": data.get(CONF_HOMEWIZARD_DEVICE_ID),
         "evcc_intg": data.get(CONF_EVCC_DEVICE_ID),
+        "joulo": data.get(CONF_JOULO_DEVICE_ID),
     }
 
 
