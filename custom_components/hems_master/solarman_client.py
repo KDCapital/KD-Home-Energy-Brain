@@ -159,7 +159,7 @@ class DeyeSolarmanClient:
             return int(response)
         return None
 
-    async def _write_single(self, address: int, value: int) -> None:
+    async def _call_write_single(self, address: int, value: int) -> None:
         await self._ensure_service()
         service = self._write_service()
         data: dict[str, Any] = {"device": self.device_id, "value": int(value)}
@@ -177,7 +177,7 @@ class DeyeSolarmanClient:
         self._last_success = dt_util.utcnow()
         self._last_error = None
 
-    async def _write_multiple(self, address: int, values: list[int]) -> None:
+    async def _call_write_multiple(self, address: int, values: list[int]) -> None:
         await self._ensure_service()
         service = self._write_multiple_service()
         data: dict[str, Any] = {
@@ -197,6 +197,68 @@ class DeyeSolarmanClient:
             raise ModbusError(self._last_error) from err
         self._last_success = dt_util.utcnow()
         self._last_error = None
+
+    async def _write_single(self, address: int, value: int) -> None:
+        """Write one register, falling back to FC16 on a Deye ACK (0x05)."""
+        try:
+            await self._call_write_single(address, value)
+            return
+        except ModbusError as first_error:
+            _LOGGER.warning(
+                "Solarman FC6 write at %s failed (%s); checking register and retrying with FC16",
+                address,
+                first_error,
+            )
+            await asyncio.sleep(1.0)
+            try:
+                if await self._read_holding(address) == int(value):
+                    _LOGGER.info(
+                        "Deye register %s already contains %s after ACK; treating write as accepted",
+                        address,
+                        value,
+                    )
+                    return
+            except ModbusError:
+                pass
+            try:
+                await self._call_write_multiple(address, [value])
+            except ModbusError as second_error:
+                raise ModbusError(
+                    f"Solarman write {address} failed with FC6 ({first_error}) "
+                    f"and FC16 ({second_error})"
+                ) from second_error
+
+    async def _write_multiple(self, address: int, values: list[int]) -> None:
+        """Write registers, falling back to FC6 for a single value."""
+        try:
+            await self._call_write_multiple(address, values)
+            return
+        except ModbusError as first_error:
+            if len(values) != 1:
+                raise
+            _LOGGER.warning(
+                "Solarman FC16 write at %s failed (%s); checking register and retrying with FC6",
+                address,
+                first_error,
+            )
+            await asyncio.sleep(1.0)
+            try:
+                if await self._read_holding(address) == int(values[0]):
+                    _LOGGER.info(
+                        "Deye register %s already contains %s after ACK; treating write as accepted",
+                        address,
+                        values[0],
+                    )
+                    return
+            except ModbusError:
+                pass
+            try:
+                await self._call_write_single(address, values[0])
+            except ModbusError as second_error:
+                raise ModbusError(
+                    f"Solarman write registers at {address} failed with FC16 "
+                    f"({first_error}) and FC6 ({second_error})"
+                ) from second_error
 
     async def async_ping(self) -> bool:
         async with self._lock:
@@ -223,13 +285,13 @@ class DeyeSolarmanClient:
         """Apply settings with the Deye 1100 unlock/lock transaction."""
         writes = settings.as_registers()
         error: Exception | None = None
-        unlock_succeeded = False
+        unlock_attempted = False
         verified: list[dict[str, int]] = []
 
         async with self._lock:
             try:
+                unlock_attempted = True
                 await self._write_single(REG_UNLOCK, MODBUS_UNLOCK_VALUE)
-                unlock_succeeded = True
                 for address, value in writes:
                     await self._write_multiple(address, [value])
                     await asyncio.sleep(0.05)
@@ -248,7 +310,7 @@ class DeyeSolarmanClient:
             except Exception as err:  # noqa: BLE001
                 error = err
             finally:
-                if unlock_succeeded:
+                if unlock_attempted:
                     try:
                         await self._write_single(REG_UNLOCK, MODBUS_LOCK_VALUE)
                     except Exception as lock_err:  # noqa: BLE001
@@ -278,7 +340,7 @@ class DeyeSolarmanClient:
             "settings": settings.as_dict(),
             "writes": [{"address": a, "value": v} for a, v in writes],
             "verified": verified,
-            "unlocked": unlock_succeeded,
+            "unlocked": unlock_attempted,
             "locked": True,
         }
 

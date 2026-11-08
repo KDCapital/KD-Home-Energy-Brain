@@ -349,14 +349,14 @@ class DeyeModbusClient:
         """
         writes = settings.as_registers()
         error: Exception | None = None
-        unlock_succeeded = False
+        unlock_attempted = False
         verified: list[dict[str, int]] = []
 
         async with self._lock:
             try:
                 await self._ensure_connected()
+                unlock_attempted = True
                 await self._write_register_unlocked(REG_UNLOCK, MODBUS_UNLOCK_VALUE)
-                unlock_succeeded = True
                 for address, value in writes:
                     await self._write_registers_unlocked(address, [value])
                     # The Deye documentation and field reports recommend a
@@ -377,7 +377,7 @@ class DeyeModbusClient:
             except Exception as err:
                 error = err
             finally:
-                if unlock_succeeded:
+                if unlock_attempted:
                     try:
                         await self._write_register_unlocked(REG_UNLOCK, MODBUS_LOCK_VALUE)
                     except Exception as lock_err:
@@ -408,6 +408,6 @@ class DeyeModbusClient:
             "settings": settings.as_dict(),
             "writes": [{"address": a, "value": v} for a, v in writes],
             "verified": verified,
-            "unlocked": unlock_succeeded,
+            "unlocked": unlock_attempted,
             "locked": True,
         }
