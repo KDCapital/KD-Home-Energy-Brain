@@ -42,7 +42,9 @@ from .const import (
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_POWER_INVERTED,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_BARE_PRICE_ENTITY,
     CONF_EMPLOYER_RATE,
+    CONF_EMPLOYER_PAYS_DYNAMIC,
     CONF_ERE_RATE,
     CONF_EV_CHARGER_SWITCH_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
@@ -75,6 +77,8 @@ from .const import (
     CONF_MODBUS_WRITE_ENABLED,
     CONF_PHASES,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_ENTITY_IS_BARE,
+    CONF_PRICE_SURCHARGE,
     CONF_PV_POWER_ENTITY,
     CONF_ROUND_TRIP_EFFICIENCY,
     CONF_SOLARMAN_DEVICE_ID,
@@ -161,6 +165,8 @@ PERIOD_KEYS = (
     "ev_energy_kwh",
     "ev_import_cost",
     "employer_revenue",
+    "employer_fixed_revenue",
+    "employer_dynamic_revenue",
     "ere_revenue",
     "arbitrage_charge_kwh",
     "arbitrage_charge_cost",
@@ -169,6 +175,8 @@ PERIOD_KEYS = (
     "grid_import_kwh",
     "grid_export_kwh",
     "pv_energy_kwh",
+    "house_energy_kwh",
+    "house_import_cost",
 )
 
 
@@ -206,6 +214,8 @@ def _empty_session() -> dict[str, Any]:
         "energy_kwh": 0.0,
         "import_cost": 0.0,
         "employer_revenue": 0.0,
+        "employer_fixed_revenue": 0.0,
+        "employer_dynamic_revenue": 0.0,
         "ere_revenue": 0.0,
         "estimated_cost": False,
     }
@@ -266,6 +276,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_ev_energy_at: datetime | None = None
         self._last_interval_at: datetime | None = None
         self._last_price: float | None = None
+        self._last_bare_price: float | None = None
         self._last_prices: list[dict[str, Any]] = []
         self._price_slots: list[PriceSlot] = []
         self._readings: dict[str, Any] = {}
@@ -575,8 +586,8 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
         return _as_bool(state.state)
 
-    def _read_price(self) -> float | None:
-        state = self._get_state(CONF_PRICE_ENTITY)
+    def _read_price(self, key: str = CONF_PRICE_ENTITY) -> float | None:
+        state = self._get_state(key)
         if state is None:
             return None
         value = _as_float(state.state)
@@ -591,8 +602,32 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _read_all(self, now: datetime) -> dict[str, Any]:
         price_state = self._get_state(CONF_PRICE_ENTITY)
-        price = self._read_price()
+        sensor_price = self._read_price()
+        surcharge = _as_float(self.config.get(CONF_PRICE_SURCHARGE), 0.0) or 0.0
+        price_is_bare = bool(
+            self.config.get(CONF_PRICE_ENTITY_IS_BARE, False)
+        )
+        bare_sensor = self._read_price(CONF_BARE_PRICE_ENTITY)
+        if price_is_bare:
+            bare_price = bare_sensor if bare_sensor is not None else sensor_price
+            price = (
+                bare_price + surcharge
+                if bare_price is not None
+                else None
+            )
+        else:
+            price = sensor_price
+            bare_price = bare_sensor
+            if bare_price is None and price is not None:
+                bare_price = price - surcharge if surcharge else price
         prices, price_slots = self._parse_price_forecast(price_state, now)
+        if price_is_bare and surcharge:
+            for entry in prices:
+                entry["price"] = round(float(entry["price"]) + surcharge, 6)
+            price_slots = [
+                PriceSlot(start=slot.start, end=slot.end, price=slot.price + surcharge)
+                for slot in price_slots
+            ]
         if not prices and price is not None:
             prices = [
                 {
@@ -611,6 +646,8 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._price_slots = price_slots
         if price is not None:
             self._last_price = price
+        if bare_price is not None:
+            self._last_bare_price = bare_price
 
         phases = max(1, int(_as_float(self.config.get(CONF_PHASES), DEFAULT_PHASES) or 3))
         voltage = max(1.0, _as_float(self.config.get(CONF_VOLTAGE), DEFAULT_VOLTAGE) or 230.0)
@@ -649,6 +686,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return {
             "price": price,
+            "bare_price": bare_price,
             "prices": prices,
             "pv": pv,
             "grid": grid,
@@ -816,9 +854,15 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             price = self._last_price
         if price is not None:
             self._last_price = price
+        bare_price = _as_float(readings.get("bare_price"))
+        if bare_price is None:
+            bare_price = self._last_bare_price
+        if bare_price is not None:
+            self._last_bare_price = bare_price
 
         if dt_hours > 0:
             self._integrate_grid_pv(readings, dt_hours)
+            self._integrate_house_cost(readings, dt_hours, price)
             self._integrate_arbitrage(readings, dt_hours, price)
 
         self._last_interval_at = now
@@ -863,21 +907,42 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_ev_energy_at = now
                 return
 
-        price = _as_float(readings.get("price"))
-        estimated = price is None
-        if price is None:
-            price = self._last_price
-        if price is None:
-            price = 0.0
+        bare_price = _as_float(readings.get("bare_price"))
+        estimated = bare_price is None
+        if bare_price is None:
+            bare_price = self._last_bare_price
+        if bare_price is None:
+            bare_price = _as_float(readings.get("price"))
+        if bare_price is None:
+            bare_price = self._last_price
+        if bare_price is None:
+            bare_price = 0.0
             estimated = True
 
         employer_rate = self.settings[CONF_EMPLOYER_RATE]
         ere_rate = self.settings[CONF_ERE_RATE]
-        economics = calculate_session(delta, delta * price, employer_rate, ere_rate)
+        employer_pays_dynamic = bool(
+            self.config.get(CONF_EMPLOYER_PAYS_DYNAMIC, False)
+        )
+        dynamic_reimbursement = delta * bare_price if employer_pays_dynamic else 0.0
+        economics = calculate_session(
+            delta,
+            delta * bare_price,
+            employer_rate,
+            ere_rate,
+            dynamic_reimbursement=dynamic_reimbursement,
+        )
         self._ensure_session(now, start_meter=total - delta)
         session = self._session
         session["energy_kwh"] = float(session["energy_kwh"]) + delta
         session["import_cost"] = float(session["import_cost"]) + economics.import_cost
+        session["employer_fixed_revenue"] = (
+            float(session["employer_fixed_revenue"]) + economics.fixed_reimbursement
+        )
+        session["employer_dynamic_revenue"] = (
+            float(session["employer_dynamic_revenue"])
+            + economics.dynamic_reimbursement
+        )
         session["employer_revenue"] = (
             float(session["employer_revenue"]) + economics.employer_revenue
         )
@@ -890,6 +955,8 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             period["ev_energy_kwh"] += delta
             period["ev_import_cost"] += economics.import_cost
             period["employer_revenue"] += economics.employer_revenue
+            period["employer_fixed_revenue"] += economics.fixed_reimbursement
+            period["employer_dynamic_revenue"] += economics.dynamic_reimbursement
             period["ere_revenue"] += economics.ere_revenue
 
         self._last_ev_energy = total
@@ -914,6 +981,25 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             energy = pv / 1000.0 * dt_hours
             self._daily["pv_energy_kwh"] += energy
             self._monthly["pv_energy_kwh"] += energy
+
+    def _integrate_house_cost(
+        self,
+        readings: Mapping[str, Any],
+        dt_hours: float,
+        full_price: float | None,
+    ) -> None:
+        """Integrate non-EV grid import at the full consumer price."""
+        grid = _as_float(readings.get("grid"))
+        ev = _as_float(readings.get("ev")) or 0.0
+        if grid is None or grid <= 0 or full_price is None:
+            return
+        non_ev_import_w = max(0.0, grid - max(0.0, ev))
+        energy_kwh = non_ev_import_w / 1000.0 * dt_hours
+        cost = energy_kwh * full_price
+        self._daily["house_energy_kwh"] += energy_kwh
+        self._daily["house_import_cost"] += cost
+        self._monthly["house_energy_kwh"] += energy_kwh
+        self._monthly["house_import_cost"] += cost
 
     def _integrate_arbitrage(
         self, readings: Mapping[str, Any], dt_hours: float, price: float | None
@@ -1061,12 +1147,17 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             DEFAULT_GRID_CURRENT_RESERVE if reserve_value is None else reserve_value
         )
         self._grid_reserve = reserve
-        price = _as_float(readings.get("price"))
+        price = _as_float(readings.get("bare_price"))
+        if price is None:
+            price = _as_float(readings.get("price"))
         self._ev_price_ok = ev_charging_is_profitable(
             price,
             self.settings[CONF_EMPLOYER_RATE],
             self.settings[CONF_ERE_RATE],
             self.settings[CONF_MIN_ARBITRAGE_MARGIN],
+            dynamic_reimbursed=bool(
+                self.config.get(CONF_EMPLOYER_PAYS_DYNAMIC, False)
+            ),
         )
         grid = _as_float(readings.get("grid"))
         min_ev_power = minimum * phases * voltage * 0.8
@@ -1746,12 +1837,16 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         energy = float(session.get("energy_kwh") or 0.0)
         cost = float(session.get("import_cost") or 0.0)
         employer = float(session.get("employer_revenue") or 0.0)
+        fixed = float(session.get("employer_fixed_revenue") or 0.0)
+        dynamic = float(session.get("employer_dynamic_revenue") or 0.0)
         ere = float(session.get("ere_revenue") or 0.0)
         return {
             **dict(session),
             "energy_kwh": round(energy, 4),
             "import_cost": round(cost, 4),
             "employer_revenue": round(employer, 4),
+            "employer_fixed_revenue": round(fixed, 4),
+            "employer_dynamic_revenue": round(dynamic, 4),
             "ere_revenue": round(ere, 4),
             "total_revenue": round(employer + ere, 4),
             "net_profit": round(employer + ere - cost, 4),
@@ -1813,6 +1908,10 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             },
             "price": {
                 "now": price,
+                "bare": _as_float(readings.get("bare_price")),
+                "surcharge": _as_float(
+                    self.config.get(CONF_PRICE_SURCHARGE), 0.0
+                ),
                 "prices": self._last_prices,
             },
             "battery": {

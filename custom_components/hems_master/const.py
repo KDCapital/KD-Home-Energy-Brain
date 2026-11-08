@@ -21,6 +21,8 @@ PLATFORMS = ["sensor", "binary_sensor", "switch", "number"]
 CONF_NAME = "name"
 
 CONF_PRICE_ENTITY = "price_entity"
+CONF_BARE_PRICE_ENTITY = "bare_price_entity"
+CONF_PRICE_ENTITY_IS_BARE = "price_entity_is_bare"
 CONF_EV_ENERGY_ENTITY = "ev_energy_entity"
 CONF_EV_POWER_ENTITY = "ev_power_entity"
 CONF_EV_CURRENT_ENTITY = "ev_current_entity"
@@ -46,6 +48,8 @@ CONF_EMPLOYER_RATE = "employer_rate"
 CONF_ERE_RATE = "ere_rate"
 CONF_MIN_ARBITRAGE_MARGIN = "min_arbitrage_margin"
 CONF_MAX_GRID_CURRENT = "max_grid_current"
+CONF_PRICE_SURCHARGE = "price_surcharge"
+CONF_EMPLOYER_PAYS_DYNAMIC = "employer_pays_dynamic"
 
 CONF_PHASES = "phases"
 CONF_VOLTAGE = "voltage"
@@ -77,6 +81,7 @@ DEFAULT_MODBUS_CONNECTION_TYPE = MODBUS_CONNECTION_SOLARMAN
 # The required price and EV MID-meter entities are handled separately so that
 # opening the optional-mapping step cannot erase them.
 ENTITY_CONFIG_KEYS = (
+    CONF_BARE_PRICE_ENTITY,
     CONF_EV_POWER_ENTITY,
     CONF_EV_CURRENT_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
@@ -101,6 +106,9 @@ DEFAULT_EMPLOYER_RATE = 0.25
 DEFAULT_ERE_RATE = 0.124
 DEFAULT_MIN_ARBITRAGE_MARGIN = 0.08
 DEFAULT_MAX_GRID_CURRENT = 25
+DEFAULT_PRICE_SURCHARGE = 0.25
+DEFAULT_EMPLOYER_PAYS_DYNAMIC = True
+DEFAULT_PRICE_ENTITY_IS_BARE = False
 DEFAULT_PHASES = 3
 DEFAULT_VOLTAGE = 230
 DEFAULT_MIN_EV_CURRENT = 6

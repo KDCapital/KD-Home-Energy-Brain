@@ -112,13 +112,27 @@ De prijssensor mag ook `ct/kWh` of `EUR/MWh` als eenheid hebben; de integratie r
 
 | Parameter | Standaard | Betekenis |
 |---|---:|---|
-| Werkgeversvergoeding | € 0,25/kWh | Vergoeding per geladen kWh. |
+| Volledige consumentenprijs | bestaande prijssensor | All-in prijs voor het huis, accu en de planner. |
+| Kale dynamische prijs | optioneel | Prijs die Eflux voor de EV-verrekening gebruikt. |
+| Prijssensor is kaal | uit | Zet aan als de gekozen prijssensor de kale prijs is; full = kaal + opslag. |
+| Opslag kaal → all-in | € 0,25/kWh | Wordt gebruikt om de ontbrekende prijs af te leiden. |
+| Werkgeversvergoeding | € 0,25/kWh | Vaste vergoeding bovenop de eventuele dynamische vergoeding. |
+| Werkgever vergoedt kale prijs | aan | Dan bestaat de werkgeversvergoeding uit kale dynamische prijs + vast tarief. |
 | ERE-opbrengst | € 0,124/kWh | Netto ERE-vergoeding per geladen kWh. |
 | Minimale arbitragemarge | € 0,08/kWh | Minimale spread voordat netladen interessant is. |
 | Accucapaciteit | 32 kWh | Twee keer 16 kWh. |
 | Round-trip-rendement | 90% | Verliezen bij laden/ontladen. |
 
-Deze waarden zijn later ook via `number.hems_*` aan te passen.
+Als de werkgever de kale prijs vergoedt, geldt per kWh:
+
+```text
+EV-kosten        = kale dynamische prijs
+Werkgever        = kale dynamische prijs + vast tarief
+ERE              = ERE-tarief
+Netto EV-marge   = vast tarief + ERE
+```
+
+De volledige consumentenprijs wordt gebruikt voor de kosten van de rest van het huis, de accu en het prijsplan. De kale prijs wordt gebruikt voor de EV-laadsessie en de Eflux-verrekening.
 
 ### 3.4 Net en EV
 
@@ -165,8 +179,11 @@ De device-naam is **HEMS**. Daardoor krijgen de belangrijkste entiteiten voorspe
 | Entiteit | Eenheid | Betekenis |
 |---|---|---|
 | `sensor.hems_net_profit_today` | € | Netto resultaat van vandaag. |
-| `sensor.hems_ev_employer_reimbursement_today` | € | Werkgeversvergoeding vandaag. |
+| `sensor.hems_ev_employer_reimbursement_today` | € | Werkgeversvergoeding vandaag (vast + dynamisch). |
+| `sensor.hems_ev_employer_fixed_reimbursement_today` | € | Vaste deel van de werkgeversvergoeding. |
+| `sensor.hems_ev_employer_dynamic_reimbursement_today` | € | Vergoeding van de kale dynamische prijs. |
 | `sensor.hems_ere_earnings_today` | € | ERE-opbrengst vandaag. |
+| `sensor.hems_house_import_cost_today` | € | Kosten van niet-EV netimport tegen de volledige consumentenprijs. |
 | `sensor.hems_battery_arbitrage_profit_today` | € | Gerealiseerde accu-arbitragewinst vandaag. |
 | `sensor.hems_ev_net_profit_today` | € | EV-opbrengst minus EV-importkosten. |
 | `sensor.hems_net_profit_month` | € | Netto resultaat deze maand. |
@@ -183,6 +200,7 @@ De device-naam is **HEMS**. Daardoor krijgen de belangrijkste entiteiten voorspe
 | `sensor.hems_ev_import_cost_today` | € |
 | `sensor.hems_grid_import_today` | kWh |
 | `sensor.hems_grid_export_today` | kWh |
+| `sensor.hems_house_energy_today` | kWh |
 | `sensor.hems_pv_energy_today` | kWh |
 | `sensor.hems_arbitrage_charge_today` | kWh |
 | `sensor.hems_arbitrage_discharge_today` | kWh |
@@ -204,6 +222,7 @@ De device-naam is **HEMS**. Daardoor krijgen de belangrijkste entiteiten voorspe
 | `sensor.hems_battery_soc` | % |
 | `sensor.hems_heatpump_cop` | – |
 | `sensor.hems_current_price` | EUR/kWh |
+| `sensor.hems_bare_price` | EUR/kWh |
 | `sensor.hems_max_allowed_ev_current` | A |
 | `sensor.hems_available_grid_current` | A |
 | `sensor.hems_system_status` | – |
@@ -259,13 +278,15 @@ Heb je een sensor met het omgekeerde teken, zet dan de betreffende inversie-opti
 Voor iedere laadsessie:
 
 ```text
-Importkosten    = Σ (kWh_ev,t × Prijs_t)
-Werkgever       = kWh_ev,totaal × Tarief_werkgever
+Importkosten    = Σ (kWh_ev,t × Kale_prijs_t)
+Vaste vergoeding= kWh_ev,totaal × Tarief_werkgever
+Dynamische vergoeding = Σ (kWh_ev,t × Kale_prijs_t)   [alleen als werkgever dit vergoedt]
+Werkgever       = Vaste vergoeding + Dynamische vergoeding
 ERE             = kWh_ev,totaal × Tarief_ERE
 Netto winst     = Werkgever + ERE − Importkosten
 ```
 
-Het acceptatievoorbeeld uit de opdracht:
+Zonder dynamische werkgeversvergoeding is het acceptatievoorbeeld:
 
 ```text
 40 kWh × € 0,25 = € 10,00 werkgever
@@ -274,15 +295,18 @@ Het acceptatievoorbeeld uit de opdracht:
 Netto = € 10,00 + € 4,96 − € 4,00 = € 10,96
 ```
 
+Met dynamische werkgeversvergoeding tegen dezelfde kale prijs wordt de dynamische component € 4,00; die valt weg tegen de importkosten. De netto marge blijft dan € 10,00 + € 4,96 − € 4,00 = € 10,96.
+
 Dit is automatisch getest in `tests/test_financial_engine.py`.
 
 ### 5.2 Dag- en maandcijfers
 
 De integratie houdt per dag en per maand de volgende grootheden bij:
 
-- EV-kWh, EV-importkosten, werkgeversvergoeding en ERE-opbrengst;
+- EV-kWh, EV-importkosten tegen **kale** prijs, werkgeversvergoeding en ERE-opbrengst;
 - accu-arbitrage: kWh geladen uit het net, kosten daarvan, kWh ontladen en vermeden importwaarde;
-- netimport, netexport en PV-energie.
+- netimport, netexport en PV-energie;
+- niet-EV netimport en de kosten daarvan tegen de **volledige consumentenprijs**.
 
 De netto dagwinst is:
 
@@ -290,6 +314,8 @@ De netto dagwinst is:
 Netto = Werkgever + ERE − EV-importkosten
       + Arbitrage-ontladen × prijs − Arbitrage-laadkosten
 ```
+
+De volledige consumentenprijs wordt gebruikt voor `sensor.hems_house_import_cost_today`. Daarin zit de netimport voor huis, warmtepomp en acculaden, minus het gemeten EV-laadvermogen. De EV-kosten en ERE-berekening gebruiken de kale prijs. Zonder EV-vermogenssensor kan HEMS het EV-deel niet van de huisimport aftrekken.
 
 De arbitragewinst wordt alleen gerealiseerd als er daadwerkelijk eerder uit het net is geladen. Zonne-energie die later wordt ontladen telt dus niet als net-arbitrage. De opslagpool wordt met het ingestelde round-trip-rendement gevuld: 1 kWh netladen levert ongeveer 0,9 kWh bruikbare ontlading op. De pool wordt ook afgeboekt wanneer de accu de EV of een export voedt; alleen lokaal vermeden import wordt als winst gewaardeerd.
 
@@ -320,7 +346,7 @@ De integratie leest de prijsvoorspelling uit de attributen van je prijssensor. O
 - `today` en `tomorrow`;
 - `prices` of `forecast`.
 
-Een item mag een dictionary zijn met `start`/`time` en `price`/`value`, of een los getal (dan worden uurintervallen vanaf middernacht aangenomen). De verwachte eenheid is **EUR/kWh**. De genormaliseerde lijst staat in het attribuut `prices` van `sensor.hems_current_price` en wordt door het dashboard gebruikt.
+Een item mag een dictionary zijn met `start`/`time` en `price`/`value`, of een los getal (dan worden uurintervallen vanaf middernacht aangenomen). De verwachte eenheid is **EUR/kWh**. De genormaliseerde lijst staat in het attribuut `prices` van `sensor.hems_current_price` en wordt door het dashboard gebruikt. `sensor.hems_bare_price` toont de kale prijs die voor de EV-verrekening wordt gebruikt.
 
 ### 6.2 Automatische accusturing
 
@@ -341,7 +367,8 @@ Alleen bij een wijziging wordt er geschreven. De integratie schrijft **niet** el
 Automatisch EV-laden wordt apart bestuurd door `switch.hems_auto_ev_charging`; `auto_arbitrage` hoeft daarvoor niet aan te staan. Het is aan als:
 
 - de auto aangesloten is (indien een connected-sensor is gekoppeld), en
-- de importprijs plus marge lager is dan `werkgeversvergoeding + ERE`, **of**
+- bij **kale** prijs plus marge lager is dan `werkgeversvergoeding + ERE` wanneer de werkgever de kale prijs niet vergoedt, **of**
+- de vaste vergoeding + ERE boven de marge uitkomt wanneer de werkgever de kale prijs wél vergoedt, **of**
 - er voldoende netexport is (ongeveer de minimale laadstroom × 3 × 230 V × 0,8).
 
 Bij `auto_ev_charging` uit doet HEMS geen laadpaalcommando's; load balancing blijft wel de veilige stroom berekenen. Met `force_ev_charging` laadt de auto ongeacht prijs, maar nooit boven de veilige netcapaciteit.

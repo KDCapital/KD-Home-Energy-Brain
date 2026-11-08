@@ -39,8 +39,13 @@ class SessionEconomics:
 
     energy_kwh: float
     import_cost: float
-    employer_revenue: float
+    fixed_reimbursement: float
+    dynamic_reimbursement: float
     ere_revenue: float
+
+    @property
+    def employer_revenue(self) -> float:
+        return self.fixed_reimbursement + self.dynamic_reimbursement
 
     @property
     def total_revenue(self) -> float:
@@ -60,6 +65,8 @@ class SessionEconomics:
         return {
             "energy_kwh": round(self.energy_kwh, 4),
             "import_cost": round(self.import_cost, 4),
+            "fixed_reimbursement": round(self.fixed_reimbursement, 4),
+            "dynamic_reimbursement": round(self.dynamic_reimbursement, 4),
             "employer_revenue": round(self.employer_revenue, 4),
             "ere_revenue": round(self.ere_revenue, 4),
             "total_revenue": round(self.total_revenue, 4),
@@ -72,21 +79,28 @@ def calculate_session(
     import_cost: float,
     employer_rate: float,
     ere_rate: float,
+    dynamic_reimbursement: float = 0.0,
 ) -> SessionEconomics:
     """Calculate the financial balance for one EV charging session.
 
-    The acceptance example from the specification:
-    40 kWh at EUR 0.10 import, EUR 0.25 employer and EUR 0.124 ERE yields
-    10.00 + 4.96 - 4.00 = EUR 10.96 net profit.
+    ``import_cost`` is based on the bare/Eflux price. When the employer also
+    reimburses that bare energy component, pass it as
+    ``dynamic_reimbursement``; the fixed employer rate is added on top.
+
+    The acceptance example from the specification (without a separate dynamic
+    component) remains: 40 kWh at EUR 0.10 import, EUR 0.25 employer and
+    EUR 0.124 ERE yields 10.00 + 4.96 - 4.00 = EUR 10.96 net profit.
     """
     energy = max(0.0, _finite(energy_kwh))
     cost = _finite(import_cost)
     employer = max(0.0, _finite(employer_rate))
     ere = max(0.0, _finite(ere_rate))
+    dynamic = _finite(dynamic_reimbursement)
     return SessionEconomics(
         energy_kwh=energy,
         import_cost=cost,
-        employer_revenue=energy * employer,
+        fixed_reimbursement=energy * employer,
+        dynamic_reimbursement=dynamic,
         ere_revenue=energy * ere,
     )
 
@@ -113,20 +127,27 @@ def ev_charging_is_profitable(
     employer_rate: float,
     ere_rate: float,
     minimum_margin: float,
+    *,
+    dynamic_reimbursed: bool = False,
 ) -> bool:
-    """Return True when the combined EV income beats the current import price.
+    """Return True when the EV charging result beats the minimum margin.
 
-    This is the pure "should I charge the car from the grid?" rule. Solar
-    surplus is evaluated separately by the coordinator because it has a
-    different opportunity value (avoided export instead of avoided import).
+    If the employer reimburses the bare dynamic energy price, that component
+    cancels against the bare import cost. The remaining margin is the fixed
+    employer rate plus ERE; the bare price therefore no longer determines the
+    net result. Without dynamic reimbursement the bare price is compared with
+    the combined fixed/ERE income.
     """
+    revenue = max(0.0, _finite(employer_rate)) + max(0.0, _finite(ere_rate))
+    margin = max(0.0, _finite(minimum_margin))
+    if dynamic_reimbursed:
+        return revenue >= margin
     if price_per_kwh is None:
         return False
     price = _finite(price_per_kwh, math.nan)
     if not math.isfinite(price):
         return False
-    revenue = max(0.0, _finite(employer_rate)) + max(0.0, _finite(ere_rate))
-    return price + max(0.0, _finite(minimum_margin)) <= revenue
+    return price + margin <= revenue
 
 
 @dataclass(frozen=True, slots=True)

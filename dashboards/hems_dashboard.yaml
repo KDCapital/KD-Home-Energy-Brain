@@ -54,7 +54,7 @@ views:
           Bedragen zijn inclusief de ingestelde werkgevers- en ERE-vergoeding, minus de dynamische importkosten.
 
       - type: grid
-        columns: 4
+        columns: 5
         square: false
         cards:
           - type: custom:button-card
@@ -119,6 +119,23 @@ views:
                 - padding: 14px
               icon:
                 - color: '#9b59b6'
+              state:
+                - font-size: 24px
+                - font-weight: 700
+              name:
+                - font-size: 12px
+                - color: var(--secondary-text-color)
+          - type: custom:button-card
+            entity: sensor.hems_house_import_cost_today
+            name: Huiskosten vandaag
+            icon: mdi:home-currency
+            show_state: true
+            styles:
+              card:
+                - border-radius: 18px
+                - padding: 14px
+              icon:
+                - color: '#e67e22'
               state:
                 - font-size: 24px
                 - font-weight: 700
@@ -226,6 +243,7 @@ views:
               - entity: sensor.hems_max_allowed_ev_current
               - entity: sensor.hems_available_grid_current
               - entity: sensor.hems_current_price
+              - entity: sensor.hems_bare_price
               - entity: sensor.hems_plan_reason
           - type: entities
             title: Energie vandaag
@@ -234,6 +252,7 @@ views:
               - entity: sensor.hems_pv_energy_today
               - entity: sensor.hems_grid_import_today
               - entity: sensor.hems_grid_export_today
+              - entity: sensor.hems_house_energy_today
 
       - type: markdown
         content: |

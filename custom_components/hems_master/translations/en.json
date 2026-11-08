@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "HEMS Master",
-        "description": "Connect the dynamic price and the EV charger MID meter. All other entities are optional and can be added in the next step or later via Configure.",
+        "description": "Connect the dynamic price sensor (full all-in or bare) and the EV charger MID meter. You can add a separate bare price for the Eflux/EV settlement in the next step.",
         "data": {
           "name": "Name",
-          "price_entity": "Dynamic price sensor (EUR/kWh)",
+          "price_entity": "Dynamic price sensor (full all-in or bare)",
           "ev_energy_entity": "EV charger MID meter (total kWh)"
         }
       },
@@ -14,6 +14,7 @@
         "title": "Entity mapping",
         "description": "Select your existing entities. HEMS Master normalises power (W/kW), current (A/mA), energy (kWh/Wh) and SOC. Leave fields empty when an entity is not available.",
         "data": {
+          "bare_price_entity": "Bare dynamic price (Eflux/EV settlement)",
           "ev_power_entity": "EV charging power",
           "ev_current_entity": "EV charging current",
           "ev_connected_entity": "EV connected",
@@ -38,9 +39,13 @@
         "title": "Financial parameters",
         "description": "Enter the all-in dynamic import price in the price sensor. Rates are in euro per kWh and can also be changed from the dashboard later.",
         "data": {
+          "price_entity": "Dynamic price sensor (full all-in or bare)",
           "employer_rate": "Employer reimbursement per kWh",
+          "employer_pays_dynamic": "Employer also reimburses the bare dynamic price",
           "ere_rate": "ERE revenue per kWh",
           "min_arbitrage_margin": "Minimum arbitrage margin per kWh",
+          "price_surcharge": "Fixed surcharge bare to all-in",
+          "price_entity_is_bare": "The selected price sensor is the bare price",
           "battery_capacity_kwh": "Battery capacity",
           "round_trip_efficiency": "Battery round-trip efficiency"
         }
@@ -103,6 +108,7 @@
         "title": "Entity mapping",
         "description": "Change the optional source and actuator entities.",
         "data": {
+          "bare_price_entity": "Bare dynamic price (Eflux/EV settlement)",
           "ev_power_entity": "EV charging power",
           "ev_current_entity": "EV charging current",
           "ev_connected_entity": "EV connected",
@@ -126,9 +132,13 @@
       "finance": {
         "title": "Financial parameters",
         "data": {
+          "price_entity": "Dynamic price sensor (full all-in or bare)",
           "employer_rate": "Employer reimbursement per kWh",
+          "employer_pays_dynamic": "Employer also reimburses the bare dynamic price",
           "ere_rate": "ERE revenue per kWh",
           "min_arbitrage_margin": "Minimum arbitrage margin per kWh",
+          "price_surcharge": "Fixed surcharge bare to all-in",
+          "price_entity_is_bare": "The selected price sensor is the bare price",
           "battery_capacity_kwh": "Battery capacity",
           "round_trip_efficiency": "Battery round-trip efficiency"
         }

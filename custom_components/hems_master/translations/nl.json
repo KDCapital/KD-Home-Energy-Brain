@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "HEMS Master",
-        "description": "Koppel de dynamische prijssensor en de MID-meter van de laadpaal. Alle overige entiteiten zijn optioneel en voeg je in de volgende stap of later via Configureren toe.",
+        "description": "Koppel de dynamische prijssensor (volledig all-in of kaal) en de MID-meter van de laadpaal. Een aparte kale prijs voor de Eflux/EV-verrekening voeg je in de volgende stap toe.",
         "data": {
           "name": "Naam",
-          "price_entity": "Dynamische prijssensor (EUR/kWh)",
+          "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
           "ev_energy_entity": "MID-meter laadpaal (totaal kWh)"
         }
       },
@@ -14,6 +14,7 @@
         "title": "Entiteiten koppelen",
         "description": "Selecteer je bestaande entiteiten. HEMS Master normaliseert vermogen (W/kW), stroom (A/mA), energie (kWh/Wh) en SOC. Laat een veld leeg als de entiteit niet beschikbaar is.",
         "data": {
+          "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "ev_power_entity": "Laadvermogen EV",
           "ev_current_entity": "Laadstroom EV",
           "ev_connected_entity": "EV aangesloten",
@@ -38,9 +39,13 @@
         "title": "Financiële parameters",
         "description": "Vul in de prijssensor de all-in dynamische importprijs in. Tarieven zijn in euro per kWh en zijn later ook via het dashboard aan te passen.",
         "data": {
+          "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
           "employer_rate": "Werkgeversvergoeding per kWh",
+          "employer_pays_dynamic": "Werkgever vergoedt ook de kale dynamische prijs",
           "ere_rate": "ERE-opbrengst per kWh",
           "min_arbitrage_margin": "Minimale arbitragemarge per kWh",
+          "price_surcharge": "Vaste opslag kaal naar all-in",
+          "price_entity_is_bare": "De gekozen prijssensor is de kale prijs",
           "battery_capacity_kwh": "Accucapaciteit",
           "round_trip_efficiency": "Round-trip-rendement accu"
         }
@@ -103,6 +108,7 @@
         "title": "Entiteiten koppelen",
         "description": "Wijzig de optionele bron- en actuator-entiteiten.",
         "data": {
+          "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "ev_power_entity": "Laadvermogen EV",
           "ev_current_entity": "Laadstroom EV",
           "ev_connected_entity": "EV aangesloten",
@@ -126,9 +132,13 @@
       "finance": {
         "title": "Financiële parameters",
         "data": {
+          "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
           "employer_rate": "Werkgeversvergoeding per kWh",
+          "employer_pays_dynamic": "Werkgever vergoedt ook de kale dynamische prijs",
           "ere_rate": "ERE-opbrengst per kWh",
           "min_arbitrage_margin": "Minimale arbitragemarge per kWh",
+          "price_surcharge": "Vaste opslag kaal naar all-in",
+          "price_entity_is_bare": "De gekozen prijssensor is de kale prijs",
           "battery_capacity_kwh": "Accucapaciteit",
           "round_trip_efficiency": "Round-trip-rendement accu"
         }

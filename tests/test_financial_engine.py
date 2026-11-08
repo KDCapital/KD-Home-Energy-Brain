@@ -38,6 +38,25 @@ def test_negative_import_price_increases_profit() -> None:
     assert round(result.net_profit, 2) == 5.24
 
 
+def test_dynamic_employer_reimbursement_cancels_bare_cost() -> None:
+    result = financial.calculate_session(
+        10,
+        1.00,
+        0.25,
+        0.124,
+        dynamic_reimbursement=1.00,
+    )
+    assert round(result.employer_revenue, 2) == 3.50
+    assert round(result.net_profit, 2) == 3.74
+    assert financial.ev_charging_is_profitable(
+        0.50,
+        0.25,
+        0.124,
+        0.08,
+        dynamic_reimbursed=True,
+    )
+
+
 def test_ev_charging_profitability() -> None:
     assert financial.ev_charging_is_profitable(0.20, 0.25, 0.124, 0.08)
     assert not financial.ev_charging_is_profitable(0.32, 0.25, 0.124, 0.08)

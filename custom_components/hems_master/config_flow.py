@@ -17,7 +17,9 @@ from .const import (
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_POWER_INVERTED,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_BARE_PRICE_ENTITY,
     CONF_EMPLOYER_RATE,
+    CONF_EMPLOYER_PAYS_DYNAMIC,
     CONF_ERE_RATE,
     CONF_EV_CHARGER_SWITCH_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
@@ -51,11 +53,14 @@ from .const import (
     CONF_NAME,
     CONF_PHASES,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_ENTITY_IS_BARE,
+    CONF_PRICE_SURCHARGE,
     CONF_PV_POWER_ENTITY,
     CONF_ROUND_TRIP_EFFICIENCY,
     CONF_SOLARMAN_DEVICE_ID,
     CONF_VOLTAGE,
     DEFAULT_BATTERY_CAPACITY,
+    DEFAULT_EMPLOYER_PAYS_DYNAMIC,
     DEFAULT_EMPLOYER_RATE,
     DEFAULT_ERE_RATE,
     DEFAULT_EV_CONTROL_ENABLED,
@@ -71,6 +76,8 @@ from .const import (
     DEFAULT_MODBUS_CONNECTION_TYPE,
     DEFAULT_NAME,
     DEFAULT_PHASES,
+    DEFAULT_PRICE_ENTITY_IS_BARE,
+    DEFAULT_PRICE_SURCHARGE,
     DEFAULT_ROUND_TRIP_EFFICIENCY,
     DEFAULT_VOLTAGE,
     DOMAIN,
@@ -120,6 +127,11 @@ def _number(
 def _entity_schema(config: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
+            _optional_entity(
+                CONF_BARE_PRICE_ENTITY,
+                "sensor",
+                config.get(CONF_BARE_PRICE_ENTITY),
+            ): _entity_selector("sensor"),
             _optional_entity(
                 CONF_EV_POWER_ENTITY, "sensor", config.get(CONF_EV_POWER_ENTITY)
             ): _entity_selector("sensor"),
@@ -212,6 +224,12 @@ def _finance_schema(config: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
             vol.Optional(
+                CONF_PRICE_ENTITY,
+                description={
+                    "suggested_value": config.get(CONF_PRICE_ENTITY) or None
+                },
+            ): _entity_selector("sensor"),
+            vol.Optional(
                 CONF_EMPLOYER_RATE,
                 default=float(config.get(CONF_EMPLOYER_RATE, DEFAULT_EMPLOYER_RATE)),
             ): _number(0, 5, 0.001, unit="EUR/kWh"),
@@ -225,6 +243,28 @@ def _finance_schema(config: dict[str, Any]) -> vol.Schema:
                     config.get(CONF_MIN_ARBITRAGE_MARGIN, DEFAULT_MIN_ARBITRAGE_MARGIN)
                 ),
             ): _number(0, 1, 0.001, unit="EUR/kWh"),
+            vol.Optional(
+                CONF_PRICE_SURCHARGE,
+                default=float(
+                    config.get(CONF_PRICE_SURCHARGE, DEFAULT_PRICE_SURCHARGE)
+                ),
+            ): _number(0, 2, 0.001, unit="EUR/kWh"),
+            vol.Optional(
+                CONF_PRICE_ENTITY_IS_BARE,
+                default=bool(
+                    config.get(
+                        CONF_PRICE_ENTITY_IS_BARE, DEFAULT_PRICE_ENTITY_IS_BARE
+                    )
+                ),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                CONF_EMPLOYER_PAYS_DYNAMIC,
+                default=bool(
+                    config.get(
+                        CONF_EMPLOYER_PAYS_DYNAMIC, DEFAULT_EMPLOYER_PAYS_DYNAMIC
+                    )
+                ),
+            ): selector.BooleanSelector(),
             vol.Optional(
                 CONF_BATTERY_CAPACITY,
                 default=float(
