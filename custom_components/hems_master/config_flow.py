@@ -257,13 +257,13 @@ def _finance_schema(config: dict[str, Any]) -> vol.Schema:
                         CONF_ERE_CONVERSION_FACTOR, DEFAULT_ERE_CONVERSION_FACTOR
                     )
                 ),
-            ): _number(0, 2, 0.000001),
+            ): _number(0, 2, 0.001),
             vol.Optional(
                 CONF_ERE_COMMISSION,
                 default=float(
                     config.get(CONF_ERE_COMMISSION, DEFAULT_ERE_COMMISSION)
                 ),
-            ): _number(0, 100, 1, unit="%"),
+            ): _number(0, 100, 1),
             vol.Optional(
                 CONF_MIN_ARBITRAGE_MARGIN,
                 default=float(
