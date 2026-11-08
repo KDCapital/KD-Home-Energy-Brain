@@ -352,7 +352,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if connection_type == MODBUS_CONNECTION_SOLARMAN:
                 device_id = str(self.config.get(CONF_SOLARMAN_DEVICE_ID) or "").strip()
                 if device_id:
-                    self._modbus_client = DeyeSolarmanClient(self.hass, device_id)
+                    self._modbus_client = DeyeSolarmanClient(hass, device_id)
             else:
                 host = str(self.config.get(CONF_MODBUS_HOST) or "").strip()
                 if host:
