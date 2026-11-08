@@ -118,10 +118,21 @@ De prijssensor mag ook `ct/kWh` of `EUR/MWh` als eenheid hebben; de integratie r
 | Opslag kaal → all-in | € 0,25/kWh | Wordt gebruikt om de ontbrekende prijs af te leiden. |
 | Werkgeversvergoeding | € 0,25/kWh | Vaste vergoeding per geladen kWh (Eflux/werkgever). |
 | Werkgever vergoedt kale prijs | aan | Dan bestaat de opbrengst uit kale dynamische prijs + vast tarief. |
-| ERE-opbrengst | € 0,124/kWh | Netto ERE-vergoeding per geladen kWh. |
+| ERE-marktprijs | optionele sensor | Actuele marktprijs in EUR/ERE. |
+| ERE per kWh | 0,332694 | NEa-conversiefactor; 1 kWh levert ongeveer 0,3327 ERE. |
+| Inboekcommissie | 0% | Percentage dat de inboekdienstverlener inhoudt. |
+| ERE-opbrengst per kWh | € 0,124/kWh | Handmatige fallback als er geen ERE-marktprijssensor is. |
 | Minimale arbitragemarge | € 0,08/kWh | Minimale spread voordat netladen interessant is. |
 | Accucapaciteit | 32 kWh | Twee keer 16 kWh. |
 | Round-trip-rendement | 90% | Verliezen bij laden/ontladen. |
+
+De ERE-opbrengst per kWh wordt bij een marktprijssensor berekend als:
+
+```text
+ERE per kWh = ERE-marktprijs × 0,332694 × (1 − inboekcommissie)
+```
+
+Bij een marktprijs van € 0,294/ERE en 0% commissie is dat ongeveer € 0,0978/kWh. Zonder marktprijssensor wordt de handmatige ERE-opbrengst per kWh gebruikt.
 
 Als Eflux/werkgever de kale prijs vergoedt, geldt per kWh:
 
@@ -230,6 +241,8 @@ De device-naam is **HEMS**. Daardoor krijgen de belangrijkste entiteiten voorspe
 | `sensor.hems_heatpump_cop` | – |
 | `sensor.hems_current_price` | EUR/kWh |
 | `sensor.hems_bare_price` | EUR/kWh |
+| `sensor.hems_ere_market_price` | EUR/ERE |
+| `sensor.hems_ere_rate_effective` | EUR/kWh |
 | `sensor.hems_max_allowed_ev_current` | A |
 | `sensor.hems_available_grid_current` | A |
 | `sensor.hems_system_status` | – |
@@ -289,7 +302,7 @@ Importkosten    = Σ (kWh_ev,t × Volledige_prijs_t)
 Vaste vergoeding= kWh_ev,totaal × Tarief_werkgever
 Dynamische vergoeding = Σ (kWh_ev,t × Kale_prijs_t)   [als Eflux/werkgever dit vergoedt]
 Opbrengst       = Vaste vergoeding + Dynamische vergoeding
-ERE             = kWh_ev,totaal × Tarief_ERE
+ERE             = kWh_ev,totaal × ERE_effectief
 Netto winst     = Opbrengst + ERE − Importkosten
 ```
 

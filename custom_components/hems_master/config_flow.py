@@ -20,6 +20,9 @@ from .const import (
     CONF_BARE_PRICE_ENTITY,
     CONF_EMPLOYER_RATE,
     CONF_EMPLOYER_PAYS_DYNAMIC,
+    CONF_ERE_COMMISSION,
+    CONF_ERE_CONVERSION_FACTOR,
+    CONF_ERE_MARKET_PRICE_ENTITY,
     CONF_ERE_RATE,
     CONF_EV_CHARGER_SWITCH_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
@@ -62,6 +65,8 @@ from .const import (
     DEFAULT_BATTERY_CAPACITY,
     DEFAULT_EMPLOYER_PAYS_DYNAMIC,
     DEFAULT_EMPLOYER_RATE,
+    DEFAULT_ERE_COMMISSION,
+    DEFAULT_ERE_CONVERSION_FACTOR,
     DEFAULT_ERE_RATE,
     DEFAULT_EV_CONTROL_ENABLED,
     DEFAULT_EV_MODE_FAST,
@@ -127,11 +132,6 @@ def _number(
 def _entity_schema(config: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
-            _optional_entity(
-                CONF_BARE_PRICE_ENTITY,
-                "sensor",
-                config.get(CONF_BARE_PRICE_ENTITY),
-            ): _entity_selector("sensor"),
             _optional_entity(
                 CONF_EV_POWER_ENTITY, "sensor", config.get(CONF_EV_POWER_ENTITY)
             ): _entity_selector("sensor"),
@@ -230,6 +230,12 @@ def _finance_schema(config: dict[str, Any]) -> vol.Schema:
                 },
             ): _entity_selector("sensor"),
             vol.Optional(
+                CONF_BARE_PRICE_ENTITY,
+                description={
+                    "suggested_value": config.get(CONF_BARE_PRICE_ENTITY) or None
+                },
+            ): _entity_selector("sensor"),
+            vol.Optional(
                 CONF_EMPLOYER_RATE,
                 default=float(config.get(CONF_EMPLOYER_RATE, DEFAULT_EMPLOYER_RATE)),
             ): _number(0, 5, 0.001, unit="EUR/kWh"),
@@ -237,6 +243,27 @@ def _finance_schema(config: dict[str, Any]) -> vol.Schema:
                 CONF_ERE_RATE,
                 default=float(config.get(CONF_ERE_RATE, DEFAULT_ERE_RATE)),
             ): _number(0, 2, 0.001, unit="EUR/kWh"),
+            vol.Optional(
+                CONF_ERE_MARKET_PRICE_ENTITY,
+                description={
+                    "suggested_value": config.get(CONF_ERE_MARKET_PRICE_ENTITY)
+                    or None
+                },
+            ): _entity_selector("sensor"),
+            vol.Optional(
+                CONF_ERE_CONVERSION_FACTOR,
+                default=float(
+                    config.get(
+                        CONF_ERE_CONVERSION_FACTOR, DEFAULT_ERE_CONVERSION_FACTOR
+                    )
+                ),
+            ): _number(0, 2, 0.000001),
+            vol.Optional(
+                CONF_ERE_COMMISSION,
+                default=float(
+                    config.get(CONF_ERE_COMMISSION, DEFAULT_ERE_COMMISSION)
+                ),
+            ): _number(0, 100, 1, unit="%"),
             vol.Optional(
                 CONF_MIN_ARBITRAGE_MARGIN,
                 default=float(

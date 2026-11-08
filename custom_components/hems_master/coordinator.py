@@ -46,6 +46,9 @@ from .const import (
     CONF_EMPLOYER_RATE,
     CONF_EMPLOYER_PAYS_DYNAMIC,
     CONF_ERE_RATE,
+    CONF_ERE_COMMISSION,
+    CONF_ERE_CONVERSION_FACTOR,
+    CONF_ERE_MARKET_PRICE_ENTITY,
     CONF_EV_CHARGER_SWITCH_ENTITY,
     CONF_EV_CONNECTED_ENTITY,
     CONF_EV_CONTROL_ENABLED,
@@ -85,6 +88,8 @@ from .const import (
     CONF_VOLTAGE,
     DEFAULT_BATTERY_CAPACITY,
     DEFAULT_EMPLOYER_RATE,
+    DEFAULT_ERE_COMMISSION,
+    DEFAULT_ERE_CONVERSION_FACTOR,
     DEFAULT_ERE_RATE,
     DEFAULT_EV_CONTROL_ENABLED,
     DEFAULT_EV_MODE_FAST,
@@ -649,6 +654,30 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if bare_price is not None:
             self._last_bare_price = bare_price
 
+        ere_market_price = self._read_price(CONF_ERE_MARKET_PRICE_ENTITY)
+        ere_factor_value = _as_float(
+            self.config.get(CONF_ERE_CONVERSION_FACTOR),
+            DEFAULT_ERE_CONVERSION_FACTOR,
+        )
+        ere_factor = (
+            DEFAULT_ERE_CONVERSION_FACTOR
+            if ere_factor_value is None
+            else ere_factor_value
+        )
+        ere_commission = _as_float(
+            self.config.get(CONF_ERE_COMMISSION), DEFAULT_ERE_COMMISSION
+        )
+        ere_commission = 0.0 if ere_commission is None else ere_commission
+        if ere_market_price is not None:
+            ere_rate = max(
+                0.0,
+                ere_market_price
+                * max(0.0, ere_factor)
+                * max(0.0, 1.0 - ere_commission / 100.0),
+            )
+        else:
+            ere_rate = self.settings[CONF_ERE_RATE]
+
         phases = max(1, int(_as_float(self.config.get(CONF_PHASES), DEFAULT_PHASES) or 3))
         voltage = max(1.0, _as_float(self.config.get(CONF_VOLTAGE), DEFAULT_VOLTAGE) or 230.0)
 
@@ -688,6 +717,10 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "price": price,
             "bare_price": bare_price,
             "prices": prices,
+            "ere_market_price": ere_market_price,
+            "ere_rate": ere_rate,
+            "ere_factor": ere_factor,
+            "ere_commission": ere_commission,
             "pv": pv,
             "grid": grid,
             "battery": battery,
@@ -922,7 +955,9 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             bare_price = full_price
 
         employer_rate = self.settings[CONF_EMPLOYER_RATE]
-        ere_rate = self.settings[CONF_ERE_RATE]
+        ere_rate = _as_float(readings.get("ere_rate"))
+        if ere_rate is None:
+            ere_rate = self.settings[CONF_ERE_RATE]
         employer_pays_dynamic = bool(
             self.config.get(CONF_EMPLOYER_PAYS_DYNAMIC, False)
         )
@@ -1154,7 +1189,8 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._ev_price_ok = ev_charging_is_profitable(
             full_price,
             self.settings[CONF_EMPLOYER_RATE],
-            self.settings[CONF_ERE_RATE],
+            _as_float(readings.get("ere_rate"), self.settings[CONF_ERE_RATE])
+            or 0.0,
             self.settings[CONF_MIN_ARBITRAGE_MARGIN],
             dynamic_reimbursed=bool(
                 self.config.get(CONF_EMPLOYER_PAYS_DYNAMIC, False)
@@ -1939,6 +1975,12 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "heatpump": {
                 "cop": _as_float(readings.get("heatpump_cop")),
                 "power": _as_float(readings.get("heatpump")),
+            },
+            "ere": {
+                "market_price": _as_float(readings.get("ere_market_price")),
+                "conversion_factor": _as_float(readings.get("ere_factor")),
+                "commission": _as_float(readings.get("ere_commission")),
+                "rate_per_kwh": _as_float(readings.get("ere_rate")),
             },
             "financial": {
                 "daily": daily,
