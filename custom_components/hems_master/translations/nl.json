@@ -3,18 +3,27 @@
     "step": {
       "user": {
         "title": "HEMS Master",
-        "description": "Koppel de dynamische prijssensor (volledig all-in of kaal) en de MID-meter van de laadpaal. Een aparte kale prijs voor de Eflux/EV-verrekening voeg je in de volgende stap toe.",
+        "description": "Koppel de dynamische prijssensor (volledig all-in of kaal) en de MID-meter van de laadpaal. Een aparte kale prijs en ERE-instellingen voeg je in de financiële stap toe.",
         "data": {
           "name": "Naam",
           "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
           "ev_energy_entity": "MID-meter laadpaal (totaal kWh)"
         }
       },
+      "sources": {
+        "title": "Brondapparaten automatisch herkennen",
+        "description": "Selecteer optioneel de apparaten van Solarman, Frank Energie, HomeWizard en EVCC. HEMS vult passende vermogen-, prijs-, accu- en EV-entiteiten alvast in. Je kunt alles in de volgende stap corrigeren.",
+        "data": {
+          "solarman_device_id": "Solarman/Deye-omvormer",
+          "frank_device_id": "Frank Energie-prijsapparaat",
+          "homewizard_device_id": "HomeWizard P1-meter",
+          "evcc_device_id": "EVCC-apparaat"
+        }
+      },
       "entities": {
         "title": "Entiteiten koppelen",
         "description": "Selecteer je bestaande entiteiten. HEMS Master normaliseert vermogen (W/kW), stroom (A/mA), energie (kWh/Wh) en SOC. Laat een veld leeg als de entiteit niet beschikbaar is.",
         "data": {
-          "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "ev_power_entity": "Laadvermogen EV",
           "ev_current_entity": "Laadstroom EV",
           "ev_connected_entity": "EV aangesloten",
@@ -102,17 +111,27 @@
         "title": "HEMS Master-opties",
         "description": "Kies wat je wilt wijzigen. Actuele waarden kunnen ook via het dashboard worden bijgesteld.",
         "menu_options": {
+          "sources": "Brondapparaten automatisch herkennen",
           "entities": "Entiteiten koppelen",
           "finance": "Financiële parameters",
           "grid": "Net- en EV-limieten",
           "modbus": "Deye-verbinding"
         }
       },
+      "sources": {
+        "title": "Brondapparaten automatisch herkennen",
+        "description": "Selecteer de apparaten die opnieuw moeten worden gescand. Gevonden entiteiten worden ingevuld; bestaande koppelingen zonder match blijven staan.",
+        "data": {
+          "solarman_device_id": "Solarman/Deye-omvormer",
+          "frank_device_id": "Frank Energie-prijsapparaat",
+          "homewizard_device_id": "HomeWizard P1-meter",
+          "evcc_device_id": "EVCC-apparaat"
+        }
+      },
       "entities": {
         "title": "Entiteiten koppelen",
         "description": "Wijzig de optionele bron- en actuator-entiteiten.",
         "data": {
-          "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "ev_power_entity": "Laadvermogen EV",
           "ev_current_entity": "Laadstroom EV",
           "ev_connected_entity": "EV aangesloten",

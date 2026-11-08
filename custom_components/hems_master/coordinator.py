@@ -820,12 +820,20 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             end_dt: datetime | None = None
             price_value: Any = None
             if isinstance(item, Mapping):
-                for key in ("start", "time", "start_time", "datetime", "timestamp", "hour"):
+                for key in (
+                    "start",
+                    "from",
+                    "time",
+                    "start_time",
+                    "datetime",
+                    "timestamp",
+                    "hour",
+                ):
                     if key in item:
                         start_dt = self._parse_dt(item.get(key))
                         if start_dt is not None:
                             break
-                for key in ("end", "end_time"):
+                for key in ("end", "till", "end_time"):
                     if key in item:
                         end_dt = self._parse_dt(item.get(key))
                         break

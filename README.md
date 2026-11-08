@@ -74,7 +74,7 @@ Het script maakt de eerste commit, zet de branch op `main` en pusht naar `origin
 
 ## 3. Configuratie
 
-De wizard heeft vijf stappen.
+De wizard heeft zes stappen.
 
 ### 3.1 Prijs en MID-meter (verplicht)
 
@@ -107,6 +107,21 @@ De prijssensor mag ook `ct/kWh` of `EUR/MWh` als eenheid hebben; de integratie r
 | Warmtepomp-COP | sensor | Weergave. |
 
 **Belangrijk voor load balancing:** de netstroomsensor moet de totale stroom op de hoofdzekering meten. HEMS trekt daar de EV-stroom vanaf om de overige belasting te bepalen. Een sensor die alleen de huisgroep meet, geeft een onveilige uitkomst. Zie §7.
+
+### 3.2a Automatisch bronnen koppelen
+
+In de stap **Brondapparaten automatisch herkennen** kun je optioneel de apparaten van deze integraties selecteren:
+
+| Bron | Automatisch ingevuld |
+|---|---|
+| Solarman/Deye | PV-vermogen, accuvermogen, accu-SOC, netvermogen, netstroom en huisbelasting |
+| Frank Energie | actuele all-in prijs en actuele kale marktprijs |
+| HomeWizard P1 | actief netvermogen en actieve netstroom |
+| EVCC | laadvermogen, laadstroom, voertuig aangesloten, max-stroom-select en modus-select |
+
+De integratie vult alleen plausibele matches in. Je controleert en corrigeert ze in de volgende stap. Bij **Frank Energie** worden de volledige all-in prijs en de kale marktprijs automatisch als twee aparte prijsbronnen gekoppeld. De Frank-prijzen gebruiken het `from`/`till`-formaat en worden door de prijsplanner ondersteund.
+
+Later opnieuw scannen: **HEMS Master → Configureren → Brondapparaten automatisch herkennen**.
 
 ### 3.3 Financieel
 
@@ -626,6 +641,7 @@ custom_components/hems_master/
 ├── const.py             constanten, registers, defaults
 ├── coordinator.py       30 s polling, 5 s balancing, 60 s plan, ledger
 ├── financial_engine.py  zuivere formules en laadpaal-/accu-algoritmen
+├── auto_detect.py       automatische koppeling van Solarman/Frank/HomeWizard/EVCC
 ├── modbus_client.py     directe Deye TCP-client met lock/unlock en readback
 ├── solarman_client.py   Deye via de bestaande Solarman-integratie (poort 8899)
 ├── sensor.py            financiële, energie-, power- en statusentiteiten

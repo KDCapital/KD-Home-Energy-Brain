@@ -37,12 +37,15 @@ from .const import (
     CONF_EV_MODE_SELECT_ENTITY,
     CONF_EV_MODE_SOLAR,
     CONF_EV_POWER_ENTITY,
+    CONF_EVCC_DEVICE_ID,
+    CONF_FRANK_DEVICE_ID,
     CONF_GRID_CURRENT_ENTITY,
     CONF_GRID_CURRENT_RESERVE,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
     CONF_HEATPUMP_COP_ENTITY,
     CONF_HEATPUMP_POWER_ENTITY,
+    CONF_HOMEWIZARD_DEVICE_ID,
     CONF_HOUSE_LOAD_ENTITY,
     CONF_MAX_EV_CURRENT,
     CONF_MAX_GRID_CURRENT,
@@ -97,6 +100,7 @@ from .solarman_client import (
     solarman_available,
     solarman_write_available,
 )
+from .auto_detect import auto_detect_sources
 
 HOST_RE = re.compile(r"^[A-Za-z0-9_.:\-]+$")
 _LOGGER = logging.getLogger(__name__)
@@ -355,6 +359,54 @@ def _grid_schema(config: dict[str, Any]) -> vol.Schema:
     )
 
 
+def _source_schema(config: dict[str, Any]) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_SOLARMAN_DEVICE_ID,
+                description={
+                    "suggested_value": config.get(CONF_SOLARMAN_DEVICE_ID) or None
+                },
+            ): selector.DeviceSelector(
+                selector.DeviceSelectorConfig(integration="solarman")
+            ),
+            vol.Optional(
+                CONF_FRANK_DEVICE_ID,
+                description={
+                    "suggested_value": config.get(CONF_FRANK_DEVICE_ID) or None
+                },
+            ): selector.DeviceSelector(
+                selector.DeviceSelectorConfig(integration="frank_energie")
+            ),
+            vol.Optional(
+                CONF_HOMEWIZARD_DEVICE_ID,
+                description={
+                    "suggested_value": config.get(CONF_HOMEWIZARD_DEVICE_ID) or None
+                },
+            ): selector.DeviceSelector(
+                selector.DeviceSelectorConfig(integration="homewizard")
+            ),
+            vol.Optional(
+                CONF_EVCC_DEVICE_ID,
+                description={
+                    "suggested_value": config.get(CONF_EVCC_DEVICE_ID) or None
+                },
+            ): selector.DeviceSelector(
+                selector.DeviceSelectorConfig(integration="evcc")
+            ),
+        }
+    )
+
+
+def _detected_sources(data: dict[str, Any]) -> dict[str, str | None]:
+    return {
+        "solarman": data.get(CONF_SOLARMAN_DEVICE_ID),
+        "frank_energie": data.get(CONF_FRANK_DEVICE_ID),
+        "homewizard": data.get(CONF_HOMEWIZARD_DEVICE_ID),
+        "evcc": data.get(CONF_EVCC_DEVICE_ID),
+    }
+
+
 def _modbus_schema(config: dict[str, Any]) -> vol.Schema:
     configured_connection_type = config.get(CONF_MODBUS_CONNECTION_TYPE)
     if configured_connection_type is None:
@@ -499,7 +551,7 @@ class HEMSConfigFlow(ConfigFlow, domain=DOMAIN):
                 ).strip()
                 self._data[CONF_PRICE_ENTITY] = price
                 self._data[CONF_EV_ENERGY_ENTITY] = ev_energy
-                return await self.async_step_entities()
+                return await self.async_step_sources()
         form_data = user_input or self._data
         schema = vol.Schema(
             {
@@ -522,6 +574,21 @@ class HEMSConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_sources(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            self._data.update(user_input)
+            detected = auto_detect_sources(
+                self.hass, _detected_sources({**self._data, **user_input})
+            )
+            self._data.update(detected)
+            return await self.async_step_entities()
+        return self.async_show_form(
+            step_id="sources",
+            data_schema=_source_schema(self._data),
+        )
 
     async def async_step_entities(
         self, user_input: dict[str, Any] | None = None
@@ -612,7 +679,19 @@ class HEMSOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         return self.async_show_menu(
             step_id="init",
-            menu_options=["entities", "finance", "grid", "modbus"],
+            menu_options=["sources", "entities", "finance", "grid", "modbus"],
+        )
+
+    async def async_step_sources(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            detected = auto_detect_sources(
+                self.hass, _detected_sources({**self._merged(), **user_input})
+            )
+            return self._finish({**user_input, **detected})
+        return self.async_show_form(
+            step_id="sources", data_schema=_source_schema(self._merged())
         )
 
     async def async_step_entities(

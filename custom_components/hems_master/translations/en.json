@@ -3,18 +3,27 @@
     "step": {
       "user": {
         "title": "HEMS Master",
-        "description": "Connect the dynamic price sensor (full all-in or bare) and the EV charger MID meter. You can add a separate bare price for the Eflux/EV settlement in the next step.",
+        "description": "Connect the dynamic price sensor (full all-in or bare) and the EV charger MID meter. You can add a separate bare price and ERE settings in the financial step.",
         "data": {
           "name": "Name",
           "price_entity": "Dynamic price sensor (full all-in or bare)",
           "ev_energy_entity": "EV charger MID meter (total kWh)"
         }
       },
+      "sources": {
+        "title": "Auto-detect source devices",
+        "description": "Optionally select the devices from Solarman, Frank Energie, HomeWizard and EVCC. HEMS will prefill matching power, price, battery and EV entities. You can correct everything in the next step.",
+        "data": {
+          "solarman_device_id": "Solarman/Deye inverter",
+          "frank_device_id": "Frank Energie price device",
+          "homewizard_device_id": "HomeWizard P1 meter",
+          "evcc_device_id": "EVCC device"
+        }
+      },
       "entities": {
         "title": "Entity mapping",
         "description": "Select your existing entities. HEMS Master normalises power (W/kW), current (A/mA), energy (kWh/Wh) and SOC. Leave fields empty when an entity is not available.",
         "data": {
-          "bare_price_entity": "Bare dynamic price (Eflux/EV settlement)",
           "ev_power_entity": "EV charging power",
           "ev_current_entity": "EV charging current",
           "ev_connected_entity": "EV connected",
@@ -102,17 +111,27 @@
         "title": "HEMS Master options",
         "description": "Choose what to change. Existing runtime values can be tuned from the dashboard.",
         "menu_options": {
+          "sources": "Auto-detect source devices",
           "entities": "Entity mapping",
           "finance": "Financial parameters",
           "grid": "Grid and EV limits",
           "modbus": "Deye connection"
         }
       },
+      "sources": {
+        "title": "Auto-detect source devices",
+        "description": "Select the devices to rescan. Matching entities are pre-filled; existing mappings without a match are kept.",
+        "data": {
+          "solarman_device_id": "Solarman/Deye inverter",
+          "frank_device_id": "Frank Energie price device",
+          "homewizard_device_id": "HomeWizard P1 meter",
+          "evcc_device_id": "EVCC device"
+        }
+      },
       "entities": {
         "title": "Entity mapping",
         "description": "Change the optional source and actuator entities.",
         "data": {
-          "bare_price_entity": "Bare dynamic price (Eflux/EV settlement)",
           "ev_power_entity": "EV charging power",
           "ev_current_entity": "EV charging current",
           "ev_connected_entity": "EV connected",
