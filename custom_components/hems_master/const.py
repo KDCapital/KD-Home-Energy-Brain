@@ -22,6 +22,8 @@ CONF_NAME = "name"
 
 CONF_PRICE_ENTITY = "price_entity"
 CONF_BARE_PRICE_ENTITY = "bare_price_entity"
+CONF_PRICE_ATTRIBUTE = "price_attribute"
+CONF_PRICE_FORECAST_ENTITY = "price_forecast_entity"
 CONF_PRICE_ENTITY_IS_BARE = "price_entity_is_bare"
 CONF_EV_ENERGY_ENTITY = "ev_energy_entity"
 CONF_EV_POWER_ENTITY = "ev_power_entity"

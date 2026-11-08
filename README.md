@@ -115,11 +115,11 @@ In de stap **Brondapparaten automatisch herkennen** kun je optioneel de apparate
 | Bron | Automatisch ingevuld |
 |---|---|
 | Solarman/Deye | PV-vermogen, accuvermogen, accu-SOC, netvermogen, netstroom en huisbelasting |
-| Frank Energie | actuele all-in prijs en actuele kale marktprijs |
+| Frank Quarter Prices | actuele prijs, volledige prijs uit `full_block.total_price_eur_kwh`, en `sensor.frank_prices_today` als forecast |
 | HomeWizard P1 | actief netvermogen en actieve netstroom |
 | EVCC | laadvermogen, laadstroom, voertuig aangesloten, max-stroom-select en modus-select |
 
-De integratie vult alleen plausibele matches in. Je controleert en corrigeert ze in de volgende stap. Bij **Frank Energie** worden de volledige all-in prijs en de kale marktprijs automatisch als twee aparte prijsbronnen gekoppeld. De Frank-prijzen gebruiken het `from`/`till`-formaat en worden door de prijsplanner ondersteund.
+De integratie vult alleen plausibele matches in. Je controleert en corrigeert ze in de volgende stap. Bij **Frank Quarter Prices** is de sensorstand de dynamische/kale prijs; de volledige all-in prijs zit in het attribuut `full_block.total_price_eur_kwh`. HEMS leest dat attribuut automatisch als volledige prijs en gebruikt de sensorstand als kale prijs. De prijsverwachting komt uit `sensor.frank_prices_today` (`prices`-attribuut met `total_price_eur_kwh` per kwartier).
 
 Later opnieuw scannen: **HEMS Master → Configureren → Brondapparaten automatisch herkennen**.
 
@@ -128,6 +128,8 @@ Later opnieuw scannen: **HEMS Master → Configureren → Brondapparaten automat
 | Parameter | Standaard | Betekenis |
 |---|---:|---|
 | Dynamische prijssensor | bestaande prijssensor | Werkelijke kWh-prijs (all-in), of kaal als je de toggle hieronder aanzet. |
+| Volledige-prijsattribuut | optioneel | Pad naar de all-in prijs, bijvoorbeeld `full_block.total_price_eur_kwh`. |
+| Prijsverwachting-sensor | optioneel | Sensor met een `prices`-attribuut, bijvoorbeeld `sensor.frank_prices_today`. |
 | Kale dynamische prijs | optioneel | Prijs die Eflux voor de EV-opbrengst gebruikt. |
 | Prijssensor is kaal | uit | Zet aan als de gekozen prijssensor de kale prijs is; full = kaal + opslag. |
 | Opslag kaal → all-in | € 0,25/kWh | Wordt gebruikt om de ontbrekende prijs af te leiden. |

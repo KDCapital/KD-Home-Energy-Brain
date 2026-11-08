@@ -7,6 +7,7 @@ is found, and manual choices are not made mandatory.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,7 +26,9 @@ from .const import (
     CONF_GRID_CURRENT_ENTITY,
     CONF_GRID_POWER_ENTITY,
     CONF_HOUSE_LOAD_ENTITY,
+    CONF_PRICE_ATTRIBUTE,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_FORECAST_ENTITY,
     CONF_PV_POWER_ENTITY,
 )
 
@@ -175,30 +178,66 @@ def _detect_solarman(candidates: list[_Candidate]) -> dict[str, str]:
     return detected
 
 
-def _detect_frank(candidates: list[_Candidate]) -> dict[str, str]:
+def _detect_frank(
+    hass: HomeAssistant, candidates: list[_Candidate]
+) -> dict[str, str]:
     detected: dict[str, str] = {}
-    full = _by_suffix(
-        candidates,
-        domain="sensor",
-        suffix="current_electricity_price_all_in",
+    # Frank Quarter Prices uses entity names such as "Current price" and
+    # "Current market price"; the older Frank Energie integration uses
+    # "..._current_electricity_price_all_in" style ids. Support both.
+    current_prices = [
+        candidate
+        for candidate in candidates
+        if candidate.domain == "sensor"
+        and "current" in candidate.text
+        and "price" in candidate.text
+        and not any(
+            token in candidate.text
+            for token in (
+                "gas",
+                "feed",
+                "return",
+                "cheap",
+                "expensive",
+                "tomorrow",
+                "zone",
+            )
+        )
+    ]
+    forecast = _by_suffix(
+        candidates, domain="sensor", suffix="prices_today"
     ) or _pick(
         candidates,
         domain="sensor",
-        include=("current", "electricity", "price", "all", "in"),
-        exclude=("gas", "feed"),
+        include=("prices", "today"),
+        exclude=("tomorrow", "current"),
+    )
+    if forecast:
+        detected[CONF_PRICE_FORECAST_ENTITY] = forecast
+    full = _pick(
+        current_prices,
+        domain="sensor",
+        include=("current", "price"),
+        exclude=("market", "feed", "return", "gas", "cheap", "expensive", "tomorrow", "zone"),
+    )
+    bare = _pick(
+        current_prices,
+        domain="sensor",
+        include=("current", "price", "market"),
+        exclude=("feed", "return", "gas", "cheap", "expensive", "tomorrow", "zone"),
     )
     if full:
+        state = hass.states.get(full)
+        attributes = state.attributes if state is not None else {}
+        block = attributes.get("full_block")
+        if isinstance(block, Mapping) and block.get("total_price_eur_kwh") is not None:
+            # Frank Quarter Prices: the state is the dynamic (bare) component;
+            # the all-in price rides along as full_block.total_price_eur_kwh.
+            detected[CONF_PRICE_ENTITY] = full
+            detected[CONF_BARE_PRICE_ENTITY] = full
+            detected[CONF_PRICE_ATTRIBUTE] = "full_block.total_price_eur_kwh"
+            return detected
         detected[CONF_PRICE_ENTITY] = full
-    bare = _by_suffix(
-        candidates,
-        domain="sensor",
-        suffix="current_electricity_market_price",
-    ) or _pick(
-        candidates,
-        domain="sensor",
-        include=("current", "electricity", "market", "price"),
-        exclude=("gas", "feed"),
-    )
     if bare:
         detected[CONF_BARE_PRICE_ENTITY] = bare
     return detected
@@ -230,9 +269,16 @@ def _detect_evcc(candidates: list[_Candidate]) -> dict[str, str]:
     current_setpoint = _pick(
         candidates,
         domain="select",
-        include=("current",),
+        include=("current", "max"),
         exclude=("charge current",),
     )
+    if current_setpoint is None:
+        current_setpoint = _pick(
+            candidates,
+            domain="select",
+            include=("current",),
+            exclude=("charge current", "min"),
+        )
     if current_setpoint is None:
         current_setpoint = _pick(
             candidates,
@@ -246,8 +292,15 @@ def _detect_evcc(candidates: list[_Candidate]) -> dict[str, str]:
         candidates,
         domain="select",
         include=("mode",),
-        exclude=("current",),
+        exclude=("current", "battery"),
     )
+    if mode is None:
+        mode = _pick(
+            candidates,
+            domain="select",
+            include=("modus",),
+            exclude=("current", "battery"),
+        )
     if mode:
         detected[CONF_EV_MODE_SELECT_ENTITY] = mode
 
@@ -295,13 +348,19 @@ def auto_detect_sources(
     solarman = _candidates(hass, source_devices.get("solarman"))
     if solarman:
         detected.update(_detect_solarman(solarman))
-    frank = _candidates(hass, source_devices.get("frank_energie"))
+    frank = _candidates(
+        hass,
+        source_devices.get("frank_quarter_prices")
+        or source_devices.get("frank_energie"),
+    )
     if frank:
-        detected.update(_detect_frank(frank))
+        detected.update(_detect_frank(hass, frank))
     homewizard = _candidates(hass, source_devices.get("homewizard"))
     if homewizard:
         detected.update(_detect_homewizard(homewizard))
-    evcc = _candidates(hass, source_devices.get("evcc"))
+    evcc = _candidates(
+        hass, source_devices.get("evcc_intg") or source_devices.get("evcc")
+    )
     if evcc:
         detected.update(_detect_evcc(evcc))
     return detected

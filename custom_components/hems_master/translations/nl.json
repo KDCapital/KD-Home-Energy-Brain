@@ -12,10 +12,10 @@
       },
       "sources": {
         "title": "Brondapparaten automatisch herkennen",
-        "description": "Selecteer optioneel de apparaten van Solarman, Frank Energie, HomeWizard en EVCC. HEMS vult passende vermogen-, prijs-, accu- en EV-entiteiten alvast in. Je kunt alles in de volgende stap corrigeren.",
+        "description": "Selecteer optioneel de apparaten van Solarman, Frank Quarter Prices, HomeWizard en EVCC. HEMS vult passende vermogen-, prijs-, accu- en EV-entiteiten alvast in. Je kunt alles in de volgende stap corrigeren.",
         "data": {
           "solarman_device_id": "Solarman/Deye-omvormer",
-          "frank_device_id": "Frank Energie-prijsapparaat",
+          "frank_device_id": "Frank Quarter Prices-apparaat",
           "homewizard_device_id": "HomeWizard P1-meter",
           "evcc_device_id": "EVCC-apparaat"
         }
@@ -49,6 +49,8 @@
         "description": "Vul in de prijssensor de all-in dynamische importprijs in. Tarieven zijn in euro per kWh en zijn later ook via het dashboard aan te passen.",
         "data": {
           "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
+          "price_attribute": "Attribuut met volledige prijs (optioneel, bijv. full_block.total_price_eur_kwh)",
+          "price_forecast_entity": "Prijsverwachting-sensor (optioneel, met prices-attribuut)",
           "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "employer_rate": "Vaste laadvergoeding per kWh (Eflux/werkgever)",
           "employer_pays_dynamic": "Eflux/werkgever vergoedt de kale dynamische prijs",
@@ -123,7 +125,7 @@
         "description": "Selecteer de apparaten die opnieuw moeten worden gescand. Gevonden entiteiten worden ingevuld; bestaande koppelingen zonder match blijven staan.",
         "data": {
           "solarman_device_id": "Solarman/Deye-omvormer",
-          "frank_device_id": "Frank Energie-prijsapparaat",
+          "frank_device_id": "Frank Quarter Prices-apparaat",
           "homewizard_device_id": "HomeWizard P1-meter",
           "evcc_device_id": "EVCC-apparaat"
         }
@@ -156,6 +158,8 @@
         "title": "Financiële parameters",
         "data": {
           "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
+          "price_attribute": "Attribuut met volledige prijs (optioneel, bijv. full_block.total_price_eur_kwh)",
+          "price_forecast_entity": "Prijsverwachting-sensor (optioneel, met prices-attribuut)",
           "bare_price_entity": "Kale dynamische prijs (Eflux/EV-verrekening)",
           "employer_rate": "Vaste laadvergoeding per kWh (Eflux/werkgever)",
           "employer_pays_dynamic": "Eflux/werkgever vergoedt de kale dynamische prijs",

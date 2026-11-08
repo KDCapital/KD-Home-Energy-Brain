@@ -60,6 +60,8 @@ from .const import (
     CONF_NAME,
     CONF_PHASES,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_ATTRIBUTE,
+    CONF_PRICE_FORECAST_ENTITY,
     CONF_PRICE_ENTITY_IS_BARE,
     CONF_PRICE_SURCHARGE,
     CONF_PV_POWER_ENTITY,
@@ -242,6 +244,17 @@ def _finance_schema(config: dict[str, Any]) -> vol.Schema:
                 },
             ): _entity_selector("sensor"),
             vol.Optional(
+                CONF_PRICE_ATTRIBUTE,
+                default=str(config.get(CONF_PRICE_ATTRIBUTE) or ""),
+            ): selector.TextSelector(),
+            vol.Optional(
+                CONF_PRICE_FORECAST_ENTITY,
+                description={
+                    "suggested_value": config.get(CONF_PRICE_FORECAST_ENTITY)
+                    or None
+                },
+            ): _entity_selector("sensor"),
+            vol.Optional(
                 CONF_EMPLOYER_RATE,
                 default=float(config.get(CONF_EMPLOYER_RATE, DEFAULT_EMPLOYER_RATE)),
             ): _number(0, 5, 0.001, unit="EUR/kWh"),
@@ -376,7 +389,7 @@ def _source_schema(config: dict[str, Any]) -> vol.Schema:
                     "suggested_value": config.get(CONF_FRANK_DEVICE_ID) or None
                 },
             ): selector.DeviceSelector(
-                selector.DeviceSelectorConfig(integration="frank_energie")
+                selector.DeviceSelectorConfig(integration="frank_quarter_prices")
             ),
             vol.Optional(
                 CONF_HOMEWIZARD_DEVICE_ID,
@@ -392,7 +405,7 @@ def _source_schema(config: dict[str, Any]) -> vol.Schema:
                     "suggested_value": config.get(CONF_EVCC_DEVICE_ID) or None
                 },
             ): selector.DeviceSelector(
-                selector.DeviceSelectorConfig(integration="evcc")
+                selector.DeviceSelectorConfig(integration="evcc_intg")
             ),
         }
     )
@@ -401,9 +414,9 @@ def _source_schema(config: dict[str, Any]) -> vol.Schema:
 def _detected_sources(data: dict[str, Any]) -> dict[str, str | None]:
     return {
         "solarman": data.get(CONF_SOLARMAN_DEVICE_ID),
-        "frank_energie": data.get(CONF_FRANK_DEVICE_ID),
+        "frank_quarter_prices": data.get(CONF_FRANK_DEVICE_ID),
         "homewizard": data.get(CONF_HOMEWIZARD_DEVICE_ID),
-        "evcc": data.get(CONF_EVCC_DEVICE_ID),
+        "evcc_intg": data.get(CONF_EVCC_DEVICE_ID),
     }
 
 

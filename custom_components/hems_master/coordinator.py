@@ -80,6 +80,8 @@ from .const import (
     CONF_MODBUS_WRITE_ENABLED,
     CONF_PHASES,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_ATTRIBUTE,
+    CONF_PRICE_FORECAST_ENTITY,
     CONF_PRICE_ENTITY_IS_BARE,
     CONF_PRICE_SURCHARGE,
     CONF_PV_POWER_ENTITY,
@@ -605,15 +607,39 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             value /= 1000.0
         return value
 
+    def _read_entity_attribute(self, key: str, path: str) -> float | None:
+        """Read a numeric nested state attribute, e.g. full_block.total_price."""
+        state = self._get_state(key)
+        if state is None or not path:
+            return None
+        value: Any = state.attributes
+        for part in path.split("."):
+            if not isinstance(value, Mapping):
+                return None
+            value = value.get(part)
+        return _as_float(value)
+
     def _read_all(self, now: datetime) -> dict[str, Any]:
         price_state = self._get_state(CONF_PRICE_ENTITY)
         sensor_price = self._read_price()
+        price_attribute = str(self.config.get(CONF_PRICE_ATTRIBUTE) or "").strip()
+        attribute_price = (
+            self._read_entity_attribute(CONF_PRICE_ENTITY, price_attribute)
+            if price_attribute
+            else None
+        )
+        if attribute_price is not None:
+            # Some price integrations expose the bare/dynamic component as the
+            # state and the all-in price as an attribute on the same entity.
+            sensor_price = attribute_price
+            bare_sensor = self._read_price(CONF_PRICE_ENTITY)
+        else:
+            bare_sensor = self._read_price(CONF_BARE_PRICE_ENTITY)
         surcharge = _as_float(self.config.get(CONF_PRICE_SURCHARGE), 0.0) or 0.0
         price_is_bare = bool(
             self.config.get(CONF_PRICE_ENTITY_IS_BARE, False)
         )
-        bare_sensor = self._read_price(CONF_BARE_PRICE_ENTITY)
-        if price_is_bare:
+        if price_is_bare and attribute_price is None:
             bare_price = bare_sensor if bare_sensor is not None else sensor_price
             price = (
                 bare_price + surcharge
@@ -625,8 +651,9 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             bare_price = bare_sensor
             if bare_price is None and price is not None:
                 bare_price = price - surcharge if surcharge else price
-        prices, price_slots = self._parse_price_forecast(price_state, now)
-        if price_is_bare and surcharge:
+        forecast_state = self._get_state(CONF_PRICE_FORECAST_ENTITY) or price_state
+        prices, price_slots = self._parse_price_forecast(forecast_state, now)
+        if price_is_bare and surcharge and attribute_price is None:
             for entry in prices:
                 entry["price"] = round(float(entry["price"]) + surcharge, 6)
             price_slots = [
@@ -837,7 +864,14 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if key in item:
                         end_dt = self._parse_dt(item.get(key))
                         break
-                for key in ("price", "value", "total", "energy_price", "market_price"):
+                for key in (
+                    "total_price_eur_kwh",
+                    "price",
+                    "value",
+                    "total",
+                    "energy_price",
+                    "market_price",
+                ):
                     if key in item:
                         candidate_price = item.get(key)
                         if isinstance(candidate_price, Mapping):
@@ -1476,13 +1510,13 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if mode_entity:
                 if force:
                     desired_mode = mode_fast
-                    keywords = ("fast", "max", "force")
+                    keywords = ("fast", "max", "force", "now")
                 elif self._ev_solar_ok:
                     desired_mode = mode_solar
                     keywords = ("solar", "pv", "zon")
                 else:
                     desired_mode = mode_min_solar
-                    keywords = ("min", "solar", "grid")
+                    keywords = ("min", "solar", "grid", "pv")
                 option = self._mode_option(mode_entity, desired_mode, keywords)
                 await self._async_set_ev_mode(mode_entity, option)
             elif switch_entity and switch_is_on is None:
