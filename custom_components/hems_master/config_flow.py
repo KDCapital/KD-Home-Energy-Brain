@@ -25,6 +25,11 @@ from .const import (
     CONF_EV_CURRENT_ENTITY,
     CONF_EV_CURRENT_NUMBER_ENTITY,
     CONF_EV_ENERGY_ENTITY,
+    CONF_EV_MODE_FAST,
+    CONF_EV_MODE_MIN_SOLAR,
+    CONF_EV_MODE_OFF,
+    CONF_EV_MODE_SELECT_ENTITY,
+    CONF_EV_MODE_SOLAR,
     CONF_EV_POWER_ENTITY,
     CONF_GRID_CURRENT_ENTITY,
     CONF_GRID_CURRENT_RESERVE,
@@ -37,6 +42,7 @@ from .const import (
     CONF_MAX_GRID_CURRENT,
     CONF_MIN_ARBITRAGE_MARGIN,
     CONF_MIN_EV_CURRENT,
+    CONF_MODBUS_CONNECTION_TYPE,
     CONF_MODBUS_ENABLED,
     CONF_MODBUS_HOST,
     CONF_MODBUS_PORT,
@@ -47,24 +53,37 @@ from .const import (
     CONF_PRICE_ENTITY,
     CONF_PV_POWER_ENTITY,
     CONF_ROUND_TRIP_EFFICIENCY,
+    CONF_SOLARMAN_DEVICE_ID,
     CONF_VOLTAGE,
     DEFAULT_BATTERY_CAPACITY,
     DEFAULT_EMPLOYER_RATE,
     DEFAULT_ERE_RATE,
     DEFAULT_EV_CONTROL_ENABLED,
+    DEFAULT_EV_MODE_FAST,
+    DEFAULT_EV_MODE_MIN_SOLAR,
+    DEFAULT_EV_MODE_OFF,
+    DEFAULT_EV_MODE_SOLAR,
     DEFAULT_GRID_CURRENT_RESERVE,
     DEFAULT_MAX_EV_CURRENT,
     DEFAULT_MAX_GRID_CURRENT,
     DEFAULT_MIN_ARBITRAGE_MARGIN,
     DEFAULT_MIN_EV_CURRENT,
+    DEFAULT_MODBUS_CONNECTION_TYPE,
     DEFAULT_NAME,
     DEFAULT_PHASES,
     DEFAULT_ROUND_TRIP_EFFICIENCY,
     DEFAULT_VOLTAGE,
     DOMAIN,
     ENTITY_CONFIG_KEYS,
+    MODBUS_CONNECTION_SOLARMAN,
+    MODBUS_CONNECTION_TCP,
 )
 from .modbus_client import DeyeModbusClient
+from .solarman_client import (
+    DeyeSolarmanClient,
+    solarman_available,
+    solarman_write_available,
+)
 
 HOST_RE = re.compile(r"^[A-Za-z0-9_.:\-]+$")
 
@@ -121,7 +140,14 @@ def _entity_schema(config: dict[str, Any]) -> vol.Schema:
                 CONF_EV_CURRENT_NUMBER_ENTITY,
                 "number",
                 config.get(CONF_EV_CURRENT_NUMBER_ENTITY),
-            ): _entity_selector("number"),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["number", "select"])
+            ),
+            _optional_entity(
+                CONF_EV_MODE_SELECT_ENTITY,
+                "select",
+                config.get(CONF_EV_MODE_SELECT_ENTITY),
+            ): _entity_selector("select"),
             _optional_entity(
                 CONF_BATTERY_POWER_ENTITY,
                 "sensor",
@@ -160,6 +186,24 @@ def _entity_schema(config: dict[str, Any]) -> vol.Schema:
                 "sensor",
                 config.get(CONF_HEATPUMP_COP_ENTITY),
             ): _entity_selector("sensor"),
+            vol.Optional(
+                CONF_EV_MODE_OFF,
+                default=str(config.get(CONF_EV_MODE_OFF, DEFAULT_EV_MODE_OFF)),
+            ): selector.TextSelector(),
+            vol.Optional(
+                CONF_EV_MODE_SOLAR,
+                default=str(config.get(CONF_EV_MODE_SOLAR, DEFAULT_EV_MODE_SOLAR)),
+            ): selector.TextSelector(),
+            vol.Optional(
+                CONF_EV_MODE_MIN_SOLAR,
+                default=str(
+                    config.get(CONF_EV_MODE_MIN_SOLAR, DEFAULT_EV_MODE_MIN_SOLAR)
+                ),
+            ): selector.TextSelector(),
+            vol.Optional(
+                CONF_EV_MODE_FAST,
+                default=str(config.get(CONF_EV_MODE_FAST, DEFAULT_EV_MODE_FAST)),
+            ): selector.TextSelector(),
         }
     )
 
@@ -243,12 +287,45 @@ def _grid_schema(config: dict[str, Any]) -> vol.Schema:
 
 
 def _modbus_schema(config: dict[str, Any]) -> vol.Schema:
+    configured_connection_type = config.get(CONF_MODBUS_CONNECTION_TYPE)
+    if configured_connection_type is None:
+        configured_connection_type = (
+            MODBUS_CONNECTION_TCP
+            if config.get(CONF_MODBUS_HOST)
+            else DEFAULT_MODBUS_CONNECTION_TYPE
+        )
     return vol.Schema(
         {
             vol.Optional(
                 CONF_MODBUS_ENABLED,
                 default=bool(config.get(CONF_MODBUS_ENABLED, False)),
             ): selector.BooleanSelector(),
+            vol.Optional(
+                CONF_MODBUS_CONNECTION_TYPE,
+                default=str(configured_connection_type),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        {
+                            "value": MODBUS_CONNECTION_SOLARMAN,
+                            "label": "Solarman integration (recommended)",
+                        },
+                        {
+                            "value": MODBUS_CONNECTION_TCP,
+                            "label": "Direct Modbus TCP",
+                        },
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Optional(
+                CONF_SOLARMAN_DEVICE_ID,
+                description={
+                    "suggested_value": config.get(CONF_SOLARMAN_DEVICE_ID) or None
+                },
+            ): selector.DeviceSelector(
+                selector.DeviceSelectorConfig(integration="solarman")
+            ),
             vol.Optional(
                 CONF_MODBUS_HOST,
                 default=str(config.get(CONF_MODBUS_HOST, "")),
@@ -280,6 +357,48 @@ async def _test_modbus(host: str, port: int, unit: int) -> None:
         await client.async_test_connection()
     finally:
         await client.async_close()
+
+
+async def _validate_modbus(
+    hass: HomeAssistant, user_input: dict[str, Any]
+) -> str | None:
+    """Validate the selected Deye transport and return a translation error key."""
+    if not bool(user_input.get(CONF_MODBUS_ENABLED, False)):
+        return None
+    connection_type = str(
+        user_input.get(CONF_MODBUS_CONNECTION_TYPE, DEFAULT_MODBUS_CONNECTION_TYPE)
+    )
+    if connection_type == MODBUS_CONNECTION_SOLARMAN:
+        device_id = str(user_input.get(CONF_SOLARMAN_DEVICE_ID) or "").strip()
+        if not device_id:
+            return "solarman_device_required"
+        if not solarman_available(hass):
+            return "solarman_not_configured"
+        if bool(user_input.get(CONF_MODBUS_WRITE_ENABLED, False)) and not solarman_write_available(
+            hass
+        ):
+            return "solarman_write_unavailable"
+        try:
+            async with asyncio.timeout(12):
+                client = DeyeSolarmanClient(hass, device_id)
+                await client.async_test_connection()
+        except Exception:  # noqa: BLE001 - reported as a form error
+            return "cannot_connect"
+        return None
+
+    host = str(user_input.get(CONF_MODBUS_HOST, "")).strip()
+    if not host or not HOST_RE.fullmatch(host):
+        return "invalid_host"
+    try:
+        async with asyncio.timeout(12):
+            await _test_modbus(
+                host,
+                int(user_input.get(CONF_MODBUS_PORT, 502)),
+                int(user_input.get(CONF_MODBUS_UNIT, 1)),
+            )
+    except Exception:  # noqa: BLE001
+        return "cannot_connect"
+    return None
 
 
 class HEMSConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -369,25 +488,23 @@ class HEMSConfigFlow(ConfigFlow, domain=DOMAIN):
             modbus_enabled = bool(user_input.get(CONF_MODBUS_ENABLED, False))
             write_enabled = bool(user_input.get(CONF_MODBUS_WRITE_ENABLED, False))
             host = str(user_input.get(CONF_MODBUS_HOST, "")).strip()
-            if modbus_enabled:
-                if not host or not HOST_RE.fullmatch(host):
-                    errors["base"] = "invalid_host"
-                else:
-                    try:
-                        async with asyncio.timeout(12):
-                            await _test_modbus(
-                                host,
-                                int(user_input.get(CONF_MODBUS_PORT, 502)),
-                                int(user_input.get(CONF_MODBUS_UNIT, 1)),
-                            )
-                    except Exception:  # noqa: BLE001 - reported as a form error
-                        errors["base"] = "cannot_connect"
+            connection_type = str(
+                user_input.get(
+                    CONF_MODBUS_CONNECTION_TYPE, DEFAULT_MODBUS_CONNECTION_TYPE
+                )
+            )
+            device_id = str(user_input.get(CONF_SOLARMAN_DEVICE_ID) or "").strip()
+            error = await _validate_modbus(self.hass, user_input)
+            if error is not None:
+                errors["base"] = error
             if not errors:
                 self._data.update(user_input)
                 self._data[CONF_MODBUS_ENABLED] = modbus_enabled
                 self._data[CONF_MODBUS_WRITE_ENABLED] = bool(
                     modbus_enabled and write_enabled
                 )
+                self._data[CONF_MODBUS_CONNECTION_TYPE] = connection_type
+                self._data[CONF_SOLARMAN_DEVICE_ID] = device_id or None
                 self._data[CONF_MODBUS_HOST] = host
                 await self.async_set_unique_id(DOMAIN)
                 self._abort_if_unique_id_configured()
@@ -463,24 +580,22 @@ class HEMSOptionsFlow(OptionsFlow):
             modbus_enabled = bool(user_input.get(CONF_MODBUS_ENABLED, False))
             write_enabled = bool(user_input.get(CONF_MODBUS_WRITE_ENABLED, False))
             host = str(user_input.get(CONF_MODBUS_HOST, "")).strip()
-            if modbus_enabled:
-                if not host or not HOST_RE.fullmatch(host):
-                    errors["base"] = "invalid_host"
-                else:
-                    try:
-                        async with asyncio.timeout(12):
-                            await _test_modbus(
-                                host,
-                                int(user_input.get(CONF_MODBUS_PORT, 502)),
-                                int(user_input.get(CONF_MODBUS_UNIT, 1)),
-                            )
-                    except Exception:  # noqa: BLE001
-                        errors["base"] = "cannot_connect"
+            connection_type = str(
+                user_input.get(
+                    CONF_MODBUS_CONNECTION_TYPE, DEFAULT_MODBUS_CONNECTION_TYPE
+                )
+            )
+            device_id = str(user_input.get(CONF_SOLARMAN_DEVICE_ID) or "").strip()
+            error = await _validate_modbus(self.hass, user_input)
+            if error is not None:
+                errors["base"] = error
             if not errors:
                 user_input[CONF_MODBUS_ENABLED] = modbus_enabled
                 user_input[CONF_MODBUS_WRITE_ENABLED] = bool(
                     modbus_enabled and write_enabled
                 )
+                user_input[CONF_MODBUS_CONNECTION_TYPE] = connection_type
+                user_input[CONF_SOLARMAN_DEVICE_ID] = device_id or None
                 user_input[CONF_MODBUS_HOST] = host
                 return self._finish(user_input)
         return self.async_show_form(

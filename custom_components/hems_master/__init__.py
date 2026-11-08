@@ -7,11 +7,20 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import ConfigEntryError, HomeAssistantError
+from homeassistant.exceptions import (
+    ConfigEntryError,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
 
 from .const import (
+    CONF_MODBUS_CONNECTION_TYPE,
     CONF_MODBUS_ENABLED,
+    CONF_MODBUS_WRITE_ENABLED,
+    CONF_SOLARMAN_DEVICE_ID,
+    DEFAULT_MODBUS_CONNECTION_TYPE,
     DOMAIN,
+    MODBUS_CONNECTION_SOLARMAN,
     PLATFORMS,
     SERVICE_APPLY_PLAN,
     SERVICE_EXPORT_AUDIT,
@@ -20,6 +29,7 @@ from .const import (
 )
 from .coordinator import HEMSDataUpdateCoordinator
 from .modbus_client import modbus_available
+from .solarman_client import solarman_available, solarman_write_available
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,10 +43,35 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one HEMS Master config entry."""
     config = {**entry.data, **entry.options}
-    if config.get(CONF_MODBUS_ENABLED) and not modbus_available():
-        raise ConfigEntryError(
-            "pymodbus is not installed; Modbus control is enabled but the dependency is missing"
-        )
+    if config.get(CONF_MODBUS_ENABLED):
+        raw_connection_type = config.get(CONF_MODBUS_CONNECTION_TYPE)
+        if raw_connection_type is None:
+            raw_connection_type = (
+                MODBUS_CONNECTION_TCP
+                if config.get(CONF_MODBUS_HOST)
+                else DEFAULT_MODBUS_CONNECTION_TYPE
+            )
+        connection_type = str(raw_connection_type)
+        if connection_type == MODBUS_CONNECTION_SOLARMAN:
+            if not config.get(CONF_SOLARMAN_DEVICE_ID):
+                raise ConfigEntryError(
+                    "No Solarman device is selected for the Deye connection"
+                )
+            if not solarman_available(hass):
+                raise ConfigEntryNotReady(
+                    "Solarman integration is not loaded; enable/repair Solarman first"
+                )
+            if config.get(CONF_MODBUS_WRITE_ENABLED) and not solarman_write_available(
+                hass
+            ):
+                raise ConfigEntryError(
+                    "The installed Solarman integration has no write services; "
+                    "update Solarman or switch to direct Modbus TCP"
+                )
+        elif not modbus_available():
+            raise ConfigEntryError(
+                "pymodbus is not installed; direct Modbus control is enabled but the dependency is missing"
+            )
     hass.data.setdefault(DOMAIN, {})
     coordinator = HEMSDataUpdateCoordinator(hass, entry)
     await coordinator.async_initialize()

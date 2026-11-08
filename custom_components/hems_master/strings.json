@@ -18,7 +18,12 @@
           "ev_current_entity": "EV charging current",
           "ev_connected_entity": "EV connected",
           "ev_charger_switch_entity": "EV charger enable switch",
-          "ev_current_number_entity": "EV charger current setpoint",
+          "ev_current_number_entity": "EV charger current setpoint (number/select)",
+          "ev_mode_select_entity": "EV charger mode (select)",
+          "ev_mode_off": "Mode value: stop/off",
+          "ev_mode_solar": "Mode value: PV only",
+          "ev_mode_min_solar": "Mode value: minimum + PV",
+          "ev_mode_fast": "Mode value: fast/forced",
           "battery_power_entity": "Battery power",
           "battery_soc_entity": "Battery state of charge",
           "grid_power_entity": "Grid power",
@@ -56,10 +61,12 @@
         }
       },
       "modbus": {
-        "title": "Deye Modbus",
-        "description": "Modbus writes are disabled by default. Enable monitoring first, verify the register map with your inverter, then enable writes. The integration always uses the register 1100 unlock/lock sequence.",
+        "title": "Deye connection",
+        "description": "Modbus writes are disabled by default. Use the existing Solarman integration (port 8899) or direct Modbus TCP (port 502). Enable monitoring first, verify the register map with your inverter, then enable writes. The integration always uses the register 1100 unlock/lock sequence.",
         "data": {
           "modbus_enabled": "Enable Modbus connection",
+          "modbus_connection_type": "Deye connection",
+          "solarman_device_id": "Solarman inverter device",
           "modbus_host": "Deye IP address or hostname",
           "modbus_port": "TCP port",
           "modbus_unit": "Modbus unit / slave ID",
@@ -71,6 +78,9 @@
       "cannot_connect": "Cannot connect to the Deye inverter. Check the IP address, port, unit ID and Modbus TCP setting.",
       "invalid_host": "Enter a valid IP address or hostname, without http:// or a path.",
       "entity_not_found": "One of the required entities does not exist in Home Assistant.",
+      "solarman_device_required": "Select the Solarman inverter device.",
+      "solarman_not_configured": "The Solarman integration is not loaded or has no compatible read service.",
+      "solarman_write_unavailable": "This Solarman version has no write services. Update Solarman or use direct Modbus TCP.",
       "unknown": "Unexpected error"
     },
     "abort": {
@@ -86,7 +96,7 @@
           "entities": "Entity mapping",
           "finance": "Financial parameters",
           "grid": "Grid and EV limits",
-          "modbus": "Deye Modbus"
+          "modbus": "Deye connection"
         }
       },
       "entities": {
@@ -97,7 +107,12 @@
           "ev_current_entity": "EV charging current",
           "ev_connected_entity": "EV connected",
           "ev_charger_switch_entity": "EV charger enable switch",
-          "ev_current_number_entity": "EV charger current setpoint",
+          "ev_current_number_entity": "EV charger current setpoint (number/select)",
+          "ev_mode_select_entity": "EV charger mode (select)",
+          "ev_mode_off": "Mode value: stop/off",
+          "ev_mode_solar": "Mode value: PV only",
+          "ev_mode_min_solar": "Mode value: minimum + PV",
+          "ev_mode_fast": "Mode value: fast/forced",
           "battery_power_entity": "Battery power",
           "battery_soc_entity": "Battery state of charge",
           "grid_power_entity": "Grid power",
@@ -133,9 +148,11 @@
         }
       },
       "modbus": {
-        "title": "Deye Modbus",
+        "title": "Deye connection",
         "data": {
           "modbus_enabled": "Enable Modbus connection",
+          "modbus_connection_type": "Deye connection",
+          "solarman_device_id": "Solarman inverter device",
           "modbus_host": "Deye IP address or hostname",
           "modbus_port": "TCP port",
           "modbus_unit": "Modbus unit / slave ID",
@@ -145,7 +162,10 @@
     },
     "error": {
       "cannot_connect": "Cannot connect to the Deye inverter.",
-      "invalid_host": "Enter a valid IP address or hostname."
+      "invalid_host": "Enter a valid IP address or hostname.",
+      "solarman_device_required": "Select the Solarman inverter device.",
+      "solarman_not_configured": "The Solarman integration is not loaded or has no compatible read service.",
+      "solarman_write_unavailable": "This Solarman version has no write services."
     }
   },
   "services": {

@@ -27,6 +27,11 @@ CONF_EV_CURRENT_ENTITY = "ev_current_entity"
 CONF_EV_CONNECTED_ENTITY = "ev_connected_entity"
 CONF_EV_CHARGER_SWITCH_ENTITY = "ev_charger_switch_entity"
 CONF_EV_CURRENT_NUMBER_ENTITY = "ev_current_number_entity"
+CONF_EV_MODE_SELECT_ENTITY = "ev_mode_select_entity"
+CONF_EV_MODE_OFF = "ev_mode_off"
+CONF_EV_MODE_SOLAR = "ev_mode_solar"
+CONF_EV_MODE_MIN_SOLAR = "ev_mode_min_solar"
+CONF_EV_MODE_FAST = "ev_mode_fast"
 
 CONF_BATTERY_POWER_ENTITY = "battery_power_entity"
 CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
@@ -58,9 +63,15 @@ DEFAULT_EV_CONTROL_ENABLED = True
 
 CONF_MODBUS_ENABLED = "modbus_enabled"
 CONF_MODBUS_WRITE_ENABLED = "modbus_write_enabled"
+CONF_MODBUS_CONNECTION_TYPE = "modbus_connection_type"
+CONF_SOLARMAN_DEVICE_ID = "solarman_device_id"
 CONF_MODBUS_HOST = "modbus_host"
 CONF_MODBUS_PORT = "modbus_port"
 CONF_MODBUS_UNIT = "modbus_unit"
+
+MODBUS_CONNECTION_SOLARMAN = "solarman"
+MODBUS_CONNECTION_TCP = "tcp"
+DEFAULT_MODBUS_CONNECTION_TYPE = MODBUS_CONNECTION_SOLARMAN
 
 # Optional entity keys stored in the config entry and cleaned by the flows.
 # The required price and EV MID-meter entities are handled separately so that
@@ -71,6 +82,7 @@ ENTITY_CONFIG_KEYS = (
     CONF_EV_CONNECTED_ENTITY,
     CONF_EV_CHARGER_SWITCH_ENTITY,
     CONF_EV_CURRENT_NUMBER_ENTITY,
+    CONF_EV_MODE_SELECT_ENTITY,
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_GRID_POWER_ENTITY,
@@ -96,6 +108,10 @@ DEFAULT_MAX_EV_CURRENT = 16
 DEFAULT_GRID_CURRENT_RESERVE = 1.0
 DEFAULT_BATTERY_CAPACITY = 32.0
 DEFAULT_ROUND_TRIP_EFFICIENCY = 0.90
+DEFAULT_EV_MODE_OFF = "Off"
+DEFAULT_EV_MODE_SOLAR = "Solar"
+DEFAULT_EV_MODE_MIN_SOLAR = "Min+Solar"
+DEFAULT_EV_MODE_FAST = "Fast"
 
 DEFAULT_SCAN_INTERVAL = 30
 LOAD_BALANCE_INTERVAL = 5

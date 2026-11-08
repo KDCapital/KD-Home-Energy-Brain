@@ -4,6 +4,7 @@
   "codeowners": ["@larsk"],
   "config_flow": true,
   "dependencies": [],
+  "after_dependencies": ["solarman"],
   "documentation": "https://github.com/larsk/hems_master",
   "integration_type": "hub",
   "iot_class": "local_polling",

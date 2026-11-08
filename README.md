@@ -27,7 +27,7 @@ Wat versie 1.0 **niet** doet:
 
 - De Weheat Sparrow P60 wordt gelezen en getoond, maar niet automatisch in temperatuur gestuurd. Daarvoor zijn schrijfrechten en een warmtepomp-specifieke API nodig die per installatie verschillen.
 - De integratie herschrijft de klok en de zes TOU-tijdvensters van de Deye niet. Ze gebruikt de registeradressen uit de opdrachtspecificatie (130, 145, 166, 172). Controleer of jouw firmware deze adressen hetzelfde interpreteert.
-- Modbus wordt via **TCP** uitgelezen en geschreven. RTU over een seriële poort is in deze versie niet ingebouwd; gebruik een Modbus TCP-gateway of de netwerkpoort van de Deye.
+- Voor de Deye is er keuze uit de bestaande **Solarman-integratie** (poort 8899, aanbevolen) of directe **Modbus TCP** (poort 502). RTU over een losse seriële poort is niet ingebouwd; gebruik Solarman of een Modbus TCP-gateway.
 - Er wordt geen belastingadvies gegeven. De fiscale behandeling van ERE is een juridisch onderwerp; zie §11.
 
 ---
@@ -50,7 +50,7 @@ Wat versie 1.0 **niet** doet:
 2. Voeg de repository-URL toe als categorie **Integration**.
 3. Installeer **HEMS Master** en herstart Home Assistant.
 
-De integratie declareert `pymodbus>=3.6.0,<4.0.0`. Home Assistant installeert deze requirement bij het laden van de integratie.
+De integratie declareert `pymodbus>=3.6.0,<4.0.0` voor directe TCP. Voor de aanbevolen Solarman-route moet de **Solarman**-integratie met schrijfservices geïnstalleerd zijn; HEMS Master leunt dan op de bestaande loggerverbinding. Gebruik bij voorkeur een recente `davidrapan/ha-solarman`-versie met `write_single_register` en `write_multiple_registers`.
 
 ---
 
@@ -94,7 +94,9 @@ De prijssensor mag ook `ct/kWh` of `EUR/MWh` als eenheid hebben; de integratie r
 | Laadstroom EV | sensor | Nauwkeuriger load balancing. |
 | EV aangesloten | binary_sensor | Voorkomen dat een lege laadpaal wordt gestart. |
 | Laadpaal aan/uit | switch | Pauzeren/hervatten van de laadpaal. |
-| Laadstroom-instelling | number | Dynamisch verlagen/verhogen van de laadstroom. |
+| Laadstroom-instelling | number of select | Dynamisch verlagen/verhogen van de laadstroom. EVCC gebruikt hiervoor `select.evcc_lader_max_current`. |
+| Laadmodus | select | Stoppen (`Off`), PV-plan (`Solar`), minimum+PV (`Min+Solar`) of geforceerd (`Fast`). |
+| Moduswaarden | tekst | De optienamen van jouw EVCC/laadpaal-select. Standaard: `Off`, `Solar`, `Min+Solar`, `Fast`. |
 | Accuvermogen | sensor | Arbitrage- en statusberekening. |
 | Accu-SOC | sensor | Nodig voor het automatische accuplan. |
 | Netvermogen | sensor | Power-flow en fallback voor netstroom. |
@@ -132,17 +134,21 @@ Deze waarden zijn later ook via `number.hems_*` aan te passen.
 | Teken netvermogen omkeren | uit | Zet aan als je net-sensor positief is bij export. |
 | Teken accuvermogen omkeren | uit | Zet aan als je accu-sensor positief is bij ontladen. |
 
-### 3.5 Deye Modbus
+### 3.5 Deye-verbinding
 
-| Parameter | Standaard | Betekenis |
-|---|---:|---|
-| Modbus-verbinding | uit | Lezen/pingen van de Deye. |
-| IP/hostname | leeg | Adres van de omvormer. |
-| TCP-poort | 502 | Modbus TCP-poort. |
-| Unit/slave-ID | 1 | Meestal 1. |
+HEMS Master ondersteunt twee transporten:
+
+| Transport | Standaard | Betekenis |
+|---|---|---|
+| **Solarman-integratie** | aanbevolen | Gebruikt de bestaande Solarman-verbinding (poort 8899, TCP, profiel Auto). Je selecteert het Solarman-omvormerapparaat; Solarman regelt logger-serial, V5-framing en reconnects. |
+| Directe Modbus TCP | alternatief | Rechtstreeks naar poort 502 met `pymodbus`, zonder Solarman. |
 | Fysieke schrijfacties | uit | **Pas inschakelen na verificatie.** |
 
-Als je Modbus-verbinding inschakelt, test de wizard de verbinding. Bij een ongeldig adres krijg je een blokkierende foutmelding; de configuratie kan dan niet worden afgerond.
+Bij **Solarman-integratie** gebruik je dezelfde installatie als je bestaande SolarMan-apparaat. De integratie roept de Solarman-services `read_holding_registers`, `write_single_register` en `write_multiple_registers` aan. Daardoor blijft de loggerverbinding in beheer bij Solarman. Ondersteunt je SolarMan-versie deze schrijfservices niet, werk SolarMan dan bij of kies directe Modbus TCP.
+
+Bij **Directe Modbus TCP** vul je IP/hostname, poort 502 en unit-ID in. De wizard test de verbinding en blokkeert bij een ongeldig adres.
+
+Heb je al een oude HEMS-entry met een TCP-host? Ga naar **Configureren → Deye-verbinding**, kies **Solarman integration** en selecteer je bestaande Deye/Solarman-apparaat. De oude host-instellingen blijven bewaard maar worden niet meer gebruikt.
 
 ### Later wijzigen
 
@@ -340,9 +346,15 @@ Automatisch EV-laden wordt apart bestuurd door `switch.hems_auto_ev_charging`; `
 
 Bij `auto_ev_charging` uit doet HEMS geen laadpaalcommando's; load balancing blijft wel de veilige stroom berekenen. Met `force_ev_charging` laadt de auto ongeacht prijs, maar nooit boven de veilige netcapaciteit.
 
-De laadpaal wordt alleen **automatisch gestart** als er een `number`-entiteit voor de laadstroom is gekoppeld. Met alleen een aan/uit-schakelaar kan HEMS de laadpaal wel pauzeren, maar niet veilig op een lagere stroom starten.
+De laadpaal wordt alleen **automatisch gestart** als er een stroominstelling is gekoppeld. Dat mag een `number`-entiteit of een `select`-entiteit zijn. Bij EVCC is dat `select.evcc_lader_max_current`. Met alleen een aan/uit-schakelaar kan HEMS de laadpaal wel pauzeren, maar niet veilig op een lagere stroom starten.
 
-Gebruik je **evcc**, koppel dan de door evcc aangemaakte `number`-entiteit voor de laadstroom en, indien beschikbaar, de bijbehorende `switch`. HEMS blijft dan de veilige stroomlimiet en het prijsbeleid bepalen; evcc verzorgt de voertuigcommunicatie en het laadprotocol.
+Gebruik je **evcc**, koppel dan:
+
+- `select.evcc_lader_max_current` als laadstroominstelling;
+- de EVCC-modusselect (bijvoorbeeld `select.evcc_lader_mode`) als laadmodus;
+- de mode-waarden `Off`, `Solar`, `Min+Solar` en `Fast` (aanpasbaar).
+
+HEMS zet de modus op `Off` om de laadsessie te stoppen, op `Solar` om volgens het EVCC-PV-plan te laden, op `Min+Solar` voor het goedkope-tariefplan en op `Fast` bij forced laden. De gekozen stroomoptie is altijd de hoogste optie die niet boven de veilige limiet uitkomt.
 
 ---
 
@@ -376,7 +388,9 @@ Dit is automatisch getest in `tests/test_financial_engine.py`.
 
 ---
 
-## 8. Deye Modbus
+## 8. Deye-koppeling en registers
+
+Standaard gebruikt HEMS Master de bestaande **Solarman-integratie**. Daarmee blijven poort 8899, logger-serial, V5-framing en reconnects bij Solarman. De integratie gebruikt de Solarman-services voor lezen en schrijven. Als alternatief kan directe Modbus TCP naar poort 502 worden gebruikt.
 
 ### 8.1 Registers
 
@@ -400,7 +414,7 @@ Bij iedere wijziging:
 6. Lees de vier registers terug en vergelijk.
 7. Schrijf `0` naar register **1100** — ook als stap 2–6 faalt.
 
-Als het opnieuw vergrendelen mislukt, sluit de client de socket en rapporteert een fout. De omvormer blijft nooit bewust ontgrendeld.
+Als het opnieuw vergrendelen mislukt, rapporteert de client een fout. Bij directe TCP sluit hij de socket; bij Solarman blijft de verbinding door Solarman beheerd. De omvormer blijft nooit bewust ontgrendeld.
 
 ### 8.3 Fallback
 
@@ -533,7 +547,7 @@ De tests dekken:
 | SW-01 | Integratie toevoegen met ongeldig Modbus-IP. | Wizard blokkeert met **Cannot connect**. |
 | SW-02 | Reg 130/145/166/172 wijzigen met writes aan. | Unlock 1100 → writes → verify → lock 1100; geen exception. |
 | SW-03 | 40 kWh tegen € 0,10, € 0,25 en € 0,124. | Netto € 10,96. |
-| SW-04 | Netstroom 34 A bij 16 A EV op 25 A zekering. | Binnen 5 s terug naar 6 A; bij < 6 A pauzeren. |
+| SW-04 | Netstroom 34 A bij 16 A EV op 25 A zekering. | Binnen 2 s terug naar 6 A; bij < 6 A pauzeren. |
 | SW-05 | Modbus > 60 s weg. | Status fallback, geen nieuwe writes; Deye blijft op interne TOU. |
 | TP-01 | 35 mm², 24,5 Nm, 100 A automaten. | Visueel/mechanisch en NEN 1010 goedgekeurd. |
 | TP-02 | Unlock/lock-transactie. | Reg 130 neemt waarde aan; zonder unlock geen write. |
@@ -557,7 +571,8 @@ custom_components/hems_master/
 ├── const.py             constanten, registers, defaults
 ├── coordinator.py       30 s polling, 5 s balancing, 60 s plan, ledger
 ├── financial_engine.py  zuivere formules en laadpaal-/accu-algoritmen
-├── modbus_client.py     Deye TCP-client met lock/unlock en readback
+├── modbus_client.py     directe Deye TCP-client met lock/unlock en readback
+├── solarman_client.py   Deye via de bestaande Solarman-integratie (poort 8899)
 ├── sensor.py            financiële, energie-, power- en statusentiteiten
 ├── binary_sensor.py     Modbus, fallback, EV-status
 ├── switch.py            auto/force-overrides
@@ -580,12 +595,12 @@ De coordinator is de enige plek die schrijft. Alle schrijfacties worden geserial
 
 1. **Geen energieprijs bij herstart:** een MID-verschil tijdens downtime wordt tegen de actuele prijs gewaardeerd en als schatting gemarkeerd. Voor exacte kosten is een intervalmeter of een historical price lookup nodig.
 2. **MID-precisie:** de resolutie van de MID-meter bepaalt hoe vaak een sessie-energie-delta wordt gezien. Een meter met 0,1 kWh-resolutie geeft minder frequente updates.
-3. **EV-actuator:** zonder `number`-entiteit kan HEMS niet veilig moduleren. Met alleen een schakelaar kan ze alleen pauzeren.
+3. **EV-actuator:** zonder `number`- of `select`-entiteit voor de laadstroom kan HEMS niet veilig moduleren. Met alleen een schakelaar kan ze alleen pauzeren.
 4. **Deye TOU:** de integratie schrijft alleen de registers uit de specificatie. Andere firmware kan een andere registermap hebben.
 5. **Warmtepomp:** alleen monitoring; geen automatische temperatuurboost in deze versie.
 6. **Netmeting:** load balancing is alleen veilig met een whole-service-stroomsensor of een betrouwbare afgeleide meting.
 7. **Handmatige override:** `force_grid_charge` blijft actief tot je hem uitzet of Home Assistant herstart. Bij een HA-crash kan de Deye de laatst geschreven toestand vasthouden. Gebruik dit niet onbeheerd.
-8. **Modbus-security:** Modbus TCP is onversleuteld. Zet de Deye niet rechtstreeks op internet; gebruik een geïsoleerd VLAN of firewallregel.
+8. **Solarman/Modbus-security:** de Solarman-route gebruikt de lokale loggerverbinding op poort 8899; directe Modbus TCP op 502 is onversleuteld. Zet de Deye niet rechtstreeks op internet; gebruik een geïsoleerd VLAN of firewallregel.
 9. **Auditdata:** de export bevat energie- en laadgegevens. Behandel die als persoonsgegevens.
 
 ---
@@ -609,4 +624,3 @@ python -m compileall custom_components/hems_master
 ## 16. Licentie en aansprakelijkheid
 
 Dit project is bedoeld als technische basis en moet vóór productie worden gevalideerd tegen jouw exacte Deye-model, firmware, laadpaal, MID-meter en netaansluiting. De software wordt geleverd zonder garantie. De gebruiker blijft verantwoordelijk voor elektrische veiligheid, netcode, ERE-regelgeving en fiscale behandeling.
-# KD-Home-Energy-Brain

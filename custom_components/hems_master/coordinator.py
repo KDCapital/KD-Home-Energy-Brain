@@ -15,6 +15,7 @@ import asyncio
 import inspect
 import logging
 import math
+import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
@@ -49,6 +50,11 @@ from .const import (
     CONF_EV_CURRENT_ENTITY,
     CONF_EV_CURRENT_NUMBER_ENTITY,
     CONF_EV_ENERGY_ENTITY,
+    CONF_EV_MODE_FAST,
+    CONF_EV_MODE_MIN_SOLAR,
+    CONF_EV_MODE_OFF,
+    CONF_EV_MODE_SELECT_ENTITY,
+    CONF_EV_MODE_SOLAR,
     CONF_EV_POWER_ENTITY,
     CONF_GRID_CURRENT_ENTITY,
     CONF_GRID_CURRENT_RESERVE,
@@ -61,6 +67,7 @@ from .const import (
     CONF_MAX_GRID_CURRENT,
     CONF_MIN_ARBITRAGE_MARGIN,
     CONF_MIN_EV_CURRENT,
+    CONF_MODBUS_CONNECTION_TYPE,
     CONF_MODBUS_ENABLED,
     CONF_MODBUS_HOST,
     CONF_MODBUS_PORT,
@@ -70,11 +77,16 @@ from .const import (
     CONF_PRICE_ENTITY,
     CONF_PV_POWER_ENTITY,
     CONF_ROUND_TRIP_EFFICIENCY,
+    CONF_SOLARMAN_DEVICE_ID,
     CONF_VOLTAGE,
     DEFAULT_BATTERY_CAPACITY,
     DEFAULT_EMPLOYER_RATE,
     DEFAULT_ERE_RATE,
     DEFAULT_EV_CONTROL_ENABLED,
+    DEFAULT_EV_MODE_FAST,
+    DEFAULT_EV_MODE_MIN_SOLAR,
+    DEFAULT_EV_MODE_OFF,
+    DEFAULT_EV_MODE_SOLAR,
     DEFAULT_GRID_CURRENT_RESERVE,
     DEFAULT_MAX_EV_CURRENT,
     DEFAULT_MAX_GRID_CURRENT,
@@ -95,6 +107,9 @@ from .const import (
     MODE_AUTO_EV_CHARGING,
     MODE_FORCE_EV_CHARGING,
     MODE_FORCE_GRID_CHARGE,
+    MODBUS_CONNECTION_SOLARMAN,
+    MODBUS_CONNECTION_TCP,
+    DEFAULT_MODBUS_CONNECTION_TYPE,
     PLAN_INTERVAL,
     REASON_AUTO_OFF,
     REASON_FALLBACK,
@@ -131,6 +146,7 @@ from .modbus_client import (
     ModbusDependencyError,
     ModbusError,
 )
+from .solarman_client import DeyeSolarmanClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -271,6 +287,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._ev_error_at: datetime | None = None
         self._last_ev_command_target: float | None = None
         self._last_ev_switch_command: bool | None = None
+        self._last_ev_mode_command: str | None = None
 
         self._plan: dict[str, Any] = {
             "reason": REASON_NO_DATA,
@@ -298,15 +315,36 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._modbus_first_failure: datetime | None = None
         self._fallback_active = False
         self._needs_safe_restore = False
-        self._modbus_client: DeyeModbusClient | None = None
+        self._modbus_client: DeyeModbusClient | DeyeSolarmanClient | None = None
+        self._modbus_connection_type = str(
+            self.config.get(
+                CONF_MODBUS_CONNECTION_TYPE, DEFAULT_MODBUS_CONNECTION_TYPE
+            )
+        )
         if self._modbus_enabled:
-            host = str(self.config.get(CONF_MODBUS_HOST) or "").strip()
-            if host:
-                self._modbus_client = DeyeModbusClient(
-                    host=host,
-                    port=int(self.config.get(CONF_MODBUS_PORT, 502)),
-                    slave_id=int(self.config.get(CONF_MODBUS_UNIT, 1)),
+            raw_connection_type = self.config.get(CONF_MODBUS_CONNECTION_TYPE)
+            if raw_connection_type is None:
+                # Backward compatibility for entries created before the
+                # Solarman transport existed: a configured host means TCP.
+                raw_connection_type = (
+                    MODBUS_CONNECTION_TCP
+                    if self.config.get(CONF_MODBUS_HOST)
+                    else DEFAULT_MODBUS_CONNECTION_TYPE
                 )
+            connection_type = str(raw_connection_type)
+            self._modbus_connection_type = connection_type
+            if connection_type == MODBUS_CONNECTION_SOLARMAN:
+                device_id = str(self.config.get(CONF_SOLARMAN_DEVICE_ID) or "").strip()
+                if device_id:
+                    self._modbus_client = DeyeSolarmanClient(self.hass, device_id)
+            else:
+                host = str(self.config.get(CONF_MODBUS_HOST) or "").strip()
+                if host:
+                    self._modbus_client = DeyeModbusClient(
+                        host=host,
+                        port=int(self.config.get(CONF_MODBUS_PORT, 502)),
+                        slave_id=int(self.config.get(CONF_MODBUS_UNIT, 1)),
+                    )
 
         self._fast_unsub = None
         self._plan_unsub = None
@@ -1058,6 +1096,149 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             desired=desired if (force or auto_control) else True,
         )
 
+    def _entity_domain(self, entity_id: str | None) -> str | None:
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is not None:
+            return state.domain
+        return entity_id.split(".", 1)[0] if "." in entity_id else None
+
+    def _select_options(self, entity_id: str | None) -> list[str]:
+        if not entity_id:
+            return []
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return []
+        options = state.attributes.get("options")
+        if not isinstance(options, (list, tuple)):
+            return []
+        return [str(option) for option in options]
+
+    @staticmethod
+    def _numeric_option(option: str) -> float | None:
+        match = re.search(r"\d+(?:[.,]\d+)?", option)
+        if match is None:
+            return None
+        try:
+            return float(match.group(0).replace(",", "."))
+        except ValueError:
+            return None
+
+    def _current_option_for_target(self, entity_id: str, target: float) -> str | None:
+        """Pick the highest select option that does not exceed the target."""
+        choices: list[tuple[float, str]] = []
+        for option in self._select_options(entity_id):
+            value = self._numeric_option(option)
+            if value is not None and value > 0:
+                choices.append((value, option))
+        if not choices:
+            return None
+        eligible = [(value, option) for value, option in choices if value <= target]
+        if not eligible:
+            return min(choices, key=lambda item: item[0])[1]
+        return max(eligible, key=lambda item: item[0])[1]
+
+    def _mode_option(
+        self, entity_id: str, configured: str, fallback_keywords: tuple[str, ...]
+    ) -> str:
+        options = self._select_options(entity_id)
+        if not options:
+            return configured
+        for option in options:
+            if option == configured:
+                return option
+        configured_lower = configured.strip().lower()
+        for option in options:
+            if option.strip().lower() == configured_lower:
+                return option
+
+        scored: list[tuple[int, int, str]] = []
+        for option in options:
+            lowered = option.strip().lower()
+            score = sum(1 for keyword in fallback_keywords if keyword in lowered)
+            if score:
+                # Prefer more matched keywords; on a tie prefer the shorter,
+                # less specific label (Solar over Min+Solar).
+                scored.append((score, -len(option), option))
+        if scored:
+            return max(scored)[2]
+        return configured
+
+    async def _async_set_ev_current(self, entity_id: str, target: float) -> bool:
+        domain = self._entity_domain(entity_id)
+        if domain == "number":
+            await self.hass.services.async_call(
+                "number",
+                "set_value",
+                {"entity_id": entity_id, "value": target},
+                blocking=True,
+            )
+            self._last_ev_command_target = target
+            return True
+        if domain == "select":
+            option = self._current_option_for_target(entity_id, target)
+            if option is None:
+                raise ValueError(
+                    f"No numeric current options found on select entity {entity_id}"
+                )
+            await self.hass.services.async_call(
+                "select",
+                "select_option",
+                {"entity_id": entity_id, "option": option},
+                blocking=True,
+            )
+            self._last_ev_command_target = target
+            return True
+        raise ValueError(
+            f"Unsupported EV current setpoint domain '{domain}' for {entity_id}"
+        )
+
+    async def _async_set_ev_mode(self, entity_id: str, option: str) -> None:
+        state = self.hass.states.get(entity_id)
+        if state is not None and state.state.strip().lower() == option.strip().lower():
+            self._last_ev_mode_command = option
+            return
+        await self.hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": entity_id, "option": option},
+            blocking=True,
+        )
+        self._last_ev_mode_command = option
+
+    async def _async_stop_ev(self) -> None:
+        """Stop the EV session through the configured actuator."""
+        mode_entity = self.config.get(CONF_EV_MODE_SELECT_ENTITY)
+        switch_entity = self.config.get(CONF_EV_CHARGER_SWITCH_ENTITY)
+        current_entity = self.config.get(CONF_EV_CURRENT_NUMBER_ENTITY)
+        mode_off = str(self.config.get(CONF_EV_MODE_OFF) or DEFAULT_EV_MODE_OFF)
+        try:
+            if mode_entity:
+                option = self._mode_option(
+                    mode_entity, mode_off, ("off", "uit", "stop", "idle")
+                )
+                await self._async_set_ev_mode(mode_entity, option)
+            elif switch_entity:
+                await self.hass.services.async_call(
+                    "switch",
+                    "turn_off",
+                    {"entity_id": switch_entity},
+                    blocking=True,
+                )
+            elif current_entity and self._entity_domain(current_entity) == "number":
+                await self._async_set_ev_current(current_entity, 0)
+            elif current_entity:
+                self._ev_actuation = "mode_entity_required_to_stop"
+                self._ev_actuation_error = None
+                return
+            self._ev_actuation = "stopped"
+            self._ev_actuation_error = None
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Could not stop the EV charger: %s", err)
+            self._ev_actuation = "error"
+            self._ev_actuation_error = str(err)
+
     async def _async_control_ev(
         self, readings: Mapping[str, Any], now: datetime
     ) -> None:
@@ -1072,7 +1253,8 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         switch_entity = self.config.get(CONF_EV_CHARGER_SWITCH_ENTITY)
         current_entity = self.config.get(CONF_EV_CURRENT_NUMBER_ENTITY)
-        if not switch_entity and not current_entity:
+        mode_entity = self.config.get(CONF_EV_MODE_SELECT_ENTITY)
+        if not switch_entity and not current_entity and not mode_entity:
             self._ev_actuation = "no_actuator"
             return
         if self._ev_error_at is not None and (now - self._ev_error_at).total_seconds() < 60:
@@ -1090,9 +1272,27 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             switch_is_on = None
 
+        mode_off = str(
+            self.config.get(CONF_EV_MODE_OFF) or DEFAULT_EV_MODE_OFF
+        )
+        mode_solar = str(
+            self.config.get(CONF_EV_MODE_SOLAR) or DEFAULT_EV_MODE_SOLAR
+        )
+        mode_min_solar = str(
+            self.config.get(CONF_EV_MODE_MIN_SOLAR) or DEFAULT_EV_MODE_MIN_SOLAR
+        )
+        mode_fast = str(
+            self.config.get(CONF_EV_MODE_FAST) or DEFAULT_EV_MODE_FAST
+        )
+
         try:
             if target <= 0:
-                if switch_entity and switch_is_on is not False:
+                if mode_entity:
+                    off_option = self._mode_option(
+                        mode_entity, mode_off, ("off", "uit", "stop", "idle")
+                    )
+                    await self._async_set_ev_mode(mode_entity, off_option)
+                elif switch_entity and switch_is_on is not False:
                     await self.hass.services.async_call(
                         "switch",
                         "turn_off",
@@ -1102,13 +1302,12 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._last_ev_switch_command = False
                 elif current_entity and self._last_ev_command_target != 0.0:
                     if not switch_entity:
-                        await self.hass.services.async_call(
-                            "number",
-                            "set_value",
-                            {"entity_id": current_entity, "value": 0},
-                            blocking=True,
-                        )
-                        self._last_ev_command_target = 0.0
+                        if self._entity_domain(current_entity) == "number":
+                            await self._async_set_ev_current(current_entity, 0)
+                        else:
+                            self._ev_actuation = "mode_entity_required_to_stop"
+                            self._ev_actuation_error = None
+                            return
                 self._ev_actuation = (
                     "grid_measurement_unavailable"
                     if not self._load_balance.measured
@@ -1119,24 +1318,16 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._ev_actuation_error = None
                 return
 
-            # A charger without a current-control entity cannot safely be
-            # started by HEMS. It can still be paused on overload.
+            # A charger without current control cannot safely be started by
+            # HEMS. It can still be stopped when needed.
             if current_entity is None:
-                if switch_entity and switch_is_on:
-                    self._ev_actuation = "current_control_unavailable"
-                    return
                 self._ev_actuation = "current_control_unavailable"
                 return
 
+            if self._last_ev_command_target != target:
+                await self._async_set_ev_current(current_entity, target)
+
             if switch_entity and switch_is_on is False:
-                if self._last_ev_command_target != target:
-                    await self.hass.services.async_call(
-                        "number",
-                        "set_value",
-                        {"entity_id": current_entity, "value": target},
-                        blocking=True,
-                    )
-                    self._last_ev_command_target = target
                 await self.hass.services.async_call(
                     "switch",
                     "turn_on",
@@ -1144,19 +1335,22 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     blocking=True,
                 )
                 self._last_ev_switch_command = True
+
+            if mode_entity:
+                if force:
+                    desired_mode = mode_fast
+                    keywords = ("fast", "max", "force")
+                elif self._ev_solar_ok:
+                    desired_mode = mode_solar
+                    keywords = ("solar", "pv", "zon")
+                else:
+                    desired_mode = mode_min_solar
+                    keywords = ("min", "solar", "grid")
+                option = self._mode_option(mode_entity, desired_mode, keywords)
+                await self._async_set_ev_mode(mode_entity, option)
             elif switch_entity and switch_is_on is None:
-                # Unknown switch state: do not blindly energize the charger.
                 self._ev_actuation = "switch_state_unknown"
                 return
-            else:
-                if self._last_ev_command_target != target:
-                    await self.hass.services.async_call(
-                        "number",
-                        "set_value",
-                        {"entity_id": current_entity, "value": target},
-                        blocking=True,
-                    )
-                    self._last_ev_command_target = target
             self._ev_actuation = "charging"
             self._ev_actuation_error = None
         except Exception as err:  # noqa: BLE001 - service calls are user-configured
@@ -1166,6 +1360,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._ev_error_at = now
             self._last_ev_command_target = None
             self._last_ev_switch_command = None
+            self._last_ev_mode_command = None
 
     # ------------------------------------------------------------------
     # Modbus plan and safety
@@ -1460,6 +1655,11 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._async_safe_off("force_grid_off")
         elif mode == MODE_FORCE_GRID_CHARGE and value:
             await self.async_force_apply()
+        elif mode == MODE_FORCE_EV_CHARGING and not value and not self.modes[
+            MODE_AUTO_EV_CHARGING
+        ]:
+            # Turning off a forced session must not leave EVCC in Fast mode.
+            await self._async_stop_ev()
         self._schedule_save()
         self.async_set_updated_data(self._build_snapshot())
         return value
@@ -1649,6 +1849,10 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "modbus": {
                 "enabled": self._modbus_enabled,
                 "write_enabled": self._modbus_write_enabled,
+                "connection_type": self._modbus_connection_type,
+                "solarman_device": bool(
+                    self.config.get(CONF_SOLARMAN_DEVICE_ID)
+                ),
                 "connected": self._modbus_connected,
                 "fallback": self._fallback_active,
                 "last_error": self._apply_error or self._connect_error,
