@@ -38,22 +38,33 @@ def test_negative_import_price_increases_profit() -> None:
     assert round(result.net_profit, 2) == 5.24
 
 
-def test_dynamic_employer_reimbursement_cancels_bare_cost() -> None:
+def test_dynamic_employer_reimbursement_uses_full_cost() -> None:
+    # 10 kWh: Eflux reimburses 10 x EUR 0.10 bare, fixed EUR 0.25,
+    # ERE EUR 0.124; actual/full price is EUR 0.35.
     result = financial.calculate_session(
         10,
-        1.00,
+        3.50,
         0.25,
         0.124,
         dynamic_reimbursement=1.00,
     )
     assert round(result.employer_revenue, 2) == 3.50
-    assert round(result.net_profit, 2) == 3.74
+    assert round(result.net_profit, 2) == 1.24
     assert financial.ev_charging_is_profitable(
-        0.50,
+        0.35,
         0.25,
         0.124,
         0.08,
         dynamic_reimbursed=True,
+        bare_price_per_kwh=0.10,
+    )
+    assert not financial.ev_charging_is_profitable(
+        0.40,
+        0.25,
+        0.124,
+        0.08,
+        dynamic_reimbursed=True,
+        bare_price_per_kwh=0.10,
     )
 
 

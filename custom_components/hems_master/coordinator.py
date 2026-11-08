@@ -907,17 +907,19 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_ev_energy_at = now
                 return
 
+        full_price = _as_float(readings.get("price"))
+        estimated = full_price is None
+        if full_price is None:
+            full_price = self._last_price
+        if full_price is None:
+            full_price = 0.0
+            estimated = True
+
         bare_price = _as_float(readings.get("bare_price"))
-        estimated = bare_price is None
         if bare_price is None:
             bare_price = self._last_bare_price
         if bare_price is None:
-            bare_price = _as_float(readings.get("price"))
-        if bare_price is None:
-            bare_price = self._last_price
-        if bare_price is None:
-            bare_price = 0.0
-            estimated = True
+            bare_price = full_price
 
         employer_rate = self.settings[CONF_EMPLOYER_RATE]
         ere_rate = self.settings[CONF_ERE_RATE]
@@ -927,7 +929,7 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dynamic_reimbursement = delta * bare_price if employer_pays_dynamic else 0.0
         economics = calculate_session(
             delta,
-            delta * bare_price,
+            delta * full_price,
             employer_rate,
             ere_rate,
             dynamic_reimbursement=dynamic_reimbursement,
@@ -1147,17 +1149,17 @@ class HEMSDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             DEFAULT_GRID_CURRENT_RESERVE if reserve_value is None else reserve_value
         )
         self._grid_reserve = reserve
-        price = _as_float(readings.get("bare_price"))
-        if price is None:
-            price = _as_float(readings.get("price"))
+        full_price = _as_float(readings.get("price"))
+        bare_price = _as_float(readings.get("bare_price"))
         self._ev_price_ok = ev_charging_is_profitable(
-            price,
+            full_price,
             self.settings[CONF_EMPLOYER_RATE],
             self.settings[CONF_ERE_RATE],
             self.settings[CONF_MIN_ARBITRAGE_MARGIN],
             dynamic_reimbursed=bool(
                 self.config.get(CONF_EMPLOYER_PAYS_DYNAMIC, False)
             ),
+            bare_price_per_kwh=bare_price,
         )
         grid = _as_float(readings.get("grid"))
         min_ev_power = minimum * phases * voltage * 0.8

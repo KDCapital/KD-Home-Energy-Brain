@@ -40,8 +40,8 @@
         "description": "Vul in de prijssensor de all-in dynamische importprijs in. Tarieven zijn in euro per kWh en zijn later ook via het dashboard aan te passen.",
         "data": {
           "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
-          "employer_rate": "Werkgeversvergoeding per kWh",
-          "employer_pays_dynamic": "Werkgever vergoedt ook de kale dynamische prijs",
+          "employer_rate": "Vaste laadvergoeding per kWh (Eflux/werkgever)",
+          "employer_pays_dynamic": "Eflux/werkgever vergoedt de kale dynamische prijs",
           "ere_rate": "ERE-opbrengst per kWh",
           "min_arbitrage_margin": "Minimale arbitragemarge per kWh",
           "price_surcharge": "Vaste opslag kaal naar all-in",
@@ -133,8 +133,8 @@
         "title": "Financiële parameters",
         "data": {
           "price_entity": "Dynamische prijssensor (volledig all-in of kaal)",
-          "employer_rate": "Werkgeversvergoeding per kWh",
-          "employer_pays_dynamic": "Werkgever vergoedt ook de kale dynamische prijs",
+          "employer_rate": "Vaste laadvergoeding per kWh (Eflux/werkgever)",
+          "employer_pays_dynamic": "Eflux/werkgever vergoedt de kale dynamische prijs",
           "ere_rate": "ERE-opbrengst per kWh",
           "min_arbitrage_margin": "Minimale arbitragemarge per kWh",
           "price_surcharge": "Vaste opslag kaal naar all-in",

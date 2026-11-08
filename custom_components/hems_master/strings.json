@@ -40,8 +40,8 @@
         "description": "Enter the all-in dynamic import price in the price sensor. Rates are in euro per kWh and can also be changed from the dashboard later.",
         "data": {
           "price_entity": "Dynamic price sensor (full all-in or bare)",
-          "employer_rate": "Employer reimbursement per kWh",
-          "employer_pays_dynamic": "Employer also reimburses the bare dynamic price",
+          "employer_rate": "Fixed charging reimbursement per kWh (Eflux/employer)",
+          "employer_pays_dynamic": "Eflux/employer reimburses the bare dynamic price",
           "ere_rate": "ERE revenue per kWh",
           "min_arbitrage_margin": "Minimum arbitrage margin per kWh",
           "price_surcharge": "Fixed surcharge bare to all-in",
@@ -133,8 +133,8 @@
         "title": "Financial parameters",
         "data": {
           "price_entity": "Dynamic price sensor (full all-in or bare)",
-          "employer_rate": "Employer reimbursement per kWh",
-          "employer_pays_dynamic": "Employer also reimburses the bare dynamic price",
+          "employer_rate": "Fixed charging reimbursement per kWh (Eflux/employer)",
+          "employer_pays_dynamic": "Eflux/employer reimburses the bare dynamic price",
           "ere_rate": "ERE revenue per kWh",
           "min_arbitrage_margin": "Minimum arbitrage margin per kWh",
           "price_surcharge": "Fixed surcharge bare to all-in",

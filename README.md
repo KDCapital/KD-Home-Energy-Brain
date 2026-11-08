@@ -112,27 +112,34 @@ De prijssensor mag ook `ct/kWh` of `EUR/MWh` als eenheid hebben; de integratie r
 
 | Parameter | Standaard | Betekenis |
 |---|---:|---|
-| Volledige consumentenprijs | bestaande prijssensor | All-in prijs voor het huis, accu en de planner. |
-| Kale dynamische prijs | optioneel | Prijs die Eflux voor de EV-verrekening gebruikt. |
+| Dynamische prijssensor | bestaande prijssensor | Werkelijke kWh-prijs (all-in), of kaal als je de toggle hieronder aanzet. |
+| Kale dynamische prijs | optioneel | Prijs die Eflux voor de EV-opbrengst gebruikt. |
 | Prijssensor is kaal | uit | Zet aan als de gekozen prijssensor de kale prijs is; full = kaal + opslag. |
 | Opslag kaal → all-in | € 0,25/kWh | Wordt gebruikt om de ontbrekende prijs af te leiden. |
-| Werkgeversvergoeding | € 0,25/kWh | Vaste vergoeding bovenop de eventuele dynamische vergoeding. |
-| Werkgever vergoedt kale prijs | aan | Dan bestaat de werkgeversvergoeding uit kale dynamische prijs + vast tarief. |
+| Werkgeversvergoeding | € 0,25/kWh | Vaste vergoeding per geladen kWh (Eflux/werkgever). |
+| Werkgever vergoedt kale prijs | aan | Dan bestaat de opbrengst uit kale dynamische prijs + vast tarief. |
 | ERE-opbrengst | € 0,124/kWh | Netto ERE-vergoeding per geladen kWh. |
 | Minimale arbitragemarge | € 0,08/kWh | Minimale spread voordat netladen interessant is. |
 | Accucapaciteit | 32 kWh | Twee keer 16 kWh. |
 | Round-trip-rendement | 90% | Verliezen bij laden/ontladen. |
 
-Als de werkgever de kale prijs vergoedt, geldt per kWh:
+Als Eflux/werkgever de kale prijs vergoedt, geldt per kWh:
 
 ```text
-EV-kosten        = kale dynamische prijs
-Werkgever        = kale dynamische prijs + vast tarief
+EV-kosten        = volledige consumentenprijs
+Opbrengst Eflux  = kale dynamische prijs
+Werkgever        = vast tarief
 ERE              = ERE-tarief
-Netto EV-marge   = vast tarief + ERE
+Netto EV-marge   = kale prijs + vast tarief + ERE − volledige prijs
 ```
 
-De volledige consumentenprijs wordt gebruikt voor de kosten van de rest van het huis, de accu en het prijsplan. De kale prijs wordt gebruikt voor de EV-laadsessie en de Eflux-verrekening.
+Met `volledige prijs = kale prijs + belasting/opslag` is dat dus:
+
+```text
+Netto EV-marge = vast tarief + ERE − belasting/opslag
+```
+
+De volledige consumentenprijs wordt gebruikt voor de kosten van de rest van het huis, de accu en het prijsplan. De kale prijs wordt gebruikt voor de Eflux-opbrengst van de EV-laadsessie.
 
 ### 3.4 Net en EV
 
@@ -278,15 +285,15 @@ Heb je een sensor met het omgekeerde teken, zet dan de betreffende inversie-opti
 Voor iedere laadsessie:
 
 ```text
-Importkosten    = Σ (kWh_ev,t × Kale_prijs_t)
+Importkosten    = Σ (kWh_ev,t × Volledige_prijs_t)
 Vaste vergoeding= kWh_ev,totaal × Tarief_werkgever
-Dynamische vergoeding = Σ (kWh_ev,t × Kale_prijs_t)   [alleen als werkgever dit vergoedt]
-Werkgever       = Vaste vergoeding + Dynamische vergoeding
+Dynamische vergoeding = Σ (kWh_ev,t × Kale_prijs_t)   [als Eflux/werkgever dit vergoedt]
+Opbrengst       = Vaste vergoeding + Dynamische vergoeding
 ERE             = kWh_ev,totaal × Tarief_ERE
-Netto winst     = Werkgever + ERE − Importkosten
+Netto winst     = Opbrengst + ERE − Importkosten
 ```
 
-Zonder dynamische werkgeversvergoeding is het acceptatievoorbeeld:
+Zonder dynamische vergoeding is het acceptatievoorbeeld:
 
 ```text
 40 kWh × € 0,25 = € 10,00 werkgever
@@ -295,7 +302,15 @@ Zonder dynamische werkgeversvergoeding is het acceptatievoorbeeld:
 Netto = € 10,00 + € 4,96 − € 4,00 = € 10,96
 ```
 
-Met dynamische werkgeversvergoeding tegen dezelfde kale prijs wordt de dynamische component € 4,00; die valt weg tegen de importkosten. De netto marge blijft dan € 10,00 + € 4,96 − € 4,00 = € 10,96.
+Met dynamische vergoeding tegen een kale prijs van € 0,10 en een volledige prijs van € 0,35:
+
+```text
+opbrengst = 10 × € 0,10 + 10 × € 0,25 + 10 × € 0,124 = € 4,74
+kosten    = 10 × € 0,35 = € 3,50
+netto     = € 1,24
+```
+
+Dat is de vaste vergoeding + ERE minus het verschil tussen de volledige en kale prijs.
 
 Dit is automatisch getest in `tests/test_financial_engine.py`.
 
@@ -303,7 +318,7 @@ Dit is automatisch getest in `tests/test_financial_engine.py`.
 
 De integratie houdt per dag en per maand de volgende grootheden bij:
 
-- EV-kWh, EV-importkosten tegen **kale** prijs, werkgeversvergoeding en ERE-opbrengst;
+- EV-kWh, EV-importkosten tegen de **volledige** prijs, dynamische Eflux-opbrengst, vaste werkgeversvergoeding en ERE-opbrengst;
 - accu-arbitrage: kWh geladen uit het net, kosten daarvan, kWh ontladen en vermeden importwaarde;
 - netimport, netexport en PV-energie;
 - niet-EV netimport en de kosten daarvan tegen de **volledige consumentenprijs**.
@@ -367,8 +382,8 @@ Alleen bij een wijziging wordt er geschreven. De integratie schrijft **niet** el
 Automatisch EV-laden wordt apart bestuurd door `switch.hems_auto_ev_charging`; `auto_arbitrage` hoeft daarvoor niet aan te staan. Het is aan als:
 
 - de auto aangesloten is (indien een connected-sensor is gekoppeld), en
-- bij **kale** prijs plus marge lager is dan `werkgeversvergoeding + ERE` wanneer de werkgever de kale prijs niet vergoedt, **of**
-- de vaste vergoeding + ERE boven de marge uitkomt wanneer de werkgever de kale prijs wél vergoedt, **of**
+- bij **volledige prijs** plus marge lager is dan `werkgeversvergoeding + ERE` wanneer de kale prijs niet vergoed wordt, **of**
+- bij **volledige prijs − kale prijs** plus marge lager is dan `vaste vergoeding + ERE` wanneer Eflux/werkgever de kale prijs wél vergoedt, **of**
 - er voldoende netexport is (ongeveer de minimale laadstroom × 3 × 230 V × 0,8).
 
 Bij `auto_ev_charging` uit doet HEMS geen laadpaalcommando's; load balancing blijft wel de veilige stroom berekenen. Met `force_ev_charging` laadt de auto ongeacht prijs, maar nooit boven de veilige netcapaciteit.

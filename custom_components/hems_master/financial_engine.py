@@ -83,9 +83,9 @@ def calculate_session(
 ) -> SessionEconomics:
     """Calculate the financial balance for one EV charging session.
 
-    ``import_cost`` is based on the bare/Eflux price. When the employer also
-    reimburses that bare energy component, pass it as
-    ``dynamic_reimbursement``; the fixed employer rate is added on top.
+    ``import_cost`` is based on the full/actual consumer price. When Eflux or
+    the employer also reimburses the bare energy component, pass it as
+    ``dynamic_reimbursement``; the fixed reimbursement rate is added on top.
 
     The acceptance example from the specification (without a separate dynamic
     component) remains: 40 kWh at EUR 0.10 import, EUR 0.25 employer and
@@ -129,25 +129,32 @@ def ev_charging_is_profitable(
     minimum_margin: float,
     *,
     dynamic_reimbursed: bool = False,
+    bare_price_per_kwh: float | None = None,
 ) -> bool:
     """Return True when the EV charging result beats the minimum margin.
 
-    If the employer reimburses the bare dynamic energy price, that component
-    cancels against the bare import cost. The remaining margin is the fixed
-    employer rate plus ERE; the bare price therefore no longer determines the
-    net result. Without dynamic reimbursement the bare price is compared with
-    the combined fixed/ERE income.
+    The consumer pays the full kWh price, while Eflux/the employer may reimburse
+    the bare dynamic price. With dynamic reimbursement the net cost used in the
+    decision is therefore ``full - bare`` (the tax/surcharge component), not the
+    full price itself.
     """
     revenue = max(0.0, _finite(employer_rate)) + max(0.0, _finite(ere_rate))
     margin = max(0.0, _finite(minimum_margin))
-    if dynamic_reimbursed:
-        return revenue >= margin
     if price_per_kwh is None:
         return False
     price = _finite(price_per_kwh, math.nan)
     if not math.isfinite(price):
         return False
-    return price + margin <= revenue
+    if dynamic_reimbursed:
+        if bare_price_per_kwh is None:
+            return False
+        bare = _finite(bare_price_per_kwh, math.nan)
+        if not math.isfinite(bare):
+            return False
+        net_cost = price - bare
+    else:
+        net_cost = price
+    return net_cost + margin <= revenue
 
 
 @dataclass(frozen=True, slots=True)
