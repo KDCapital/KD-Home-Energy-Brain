@@ -47,6 +47,11 @@ SERVICE_WRITE_MULTIPLE = "write_multiple_registers"
 SERVICE_WRITE_SINGLE_LEGACY = "write_holding_register"
 SERVICE_WRITE_MULTIPLE_LEGACY = "write_multiple_holding_registers"
 
+# Solarman's service implementation uses ``address or register`` internally,
+# so address 0 is treated as missing and fails. Register 3 is a harmless
+# non-zero holding register used only as a connectivity probe.
+PING_REGISTER = 3
+
 
 def solarman_available(hass: HomeAssistant) -> bool:
     """Return whether the Solarman integration exposes its read service."""
@@ -196,7 +201,7 @@ class DeyeSolarmanClient:
     async def async_ping(self) -> bool:
         async with self._lock:
             try:
-                await self._read_holding(0)
+                await self._read_holding(PING_REGISTER)
                 return True
             except ModbusDependencyError:
                 raise
@@ -205,7 +210,7 @@ class DeyeSolarmanClient:
 
     async def async_test_connection(self) -> bool:
         async with self._lock:
-            await self._read_holding(0)
+            await self._read_holding(PING_REGISTER)
             return True
 
     async def async_read_register(self, address: int) -> int:

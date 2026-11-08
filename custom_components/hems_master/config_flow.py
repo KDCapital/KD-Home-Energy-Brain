@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from typing import Any
 
@@ -98,6 +99,7 @@ from .solarman_client import (
 )
 
 HOST_RE = re.compile(r"^[A-Za-z0-9_.:\-]+$")
+_LOGGER = logging.getLogger(__name__)
 
 
 def _entity_selector(domain: str) -> selector.EntitySelector:
@@ -449,7 +451,8 @@ async def _validate_modbus(
             async with asyncio.timeout(12):
                 client = DeyeSolarmanClient(hass, device_id)
                 await client.async_test_connection()
-        except Exception:  # noqa: BLE001 - reported as a form error
+        except Exception as err:  # noqa: BLE001 - reported as a form error
+            _LOGGER.warning("Solarman connection test failed: %s", err)
             return "cannot_connect"
         return None
 
